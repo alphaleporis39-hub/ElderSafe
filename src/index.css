@@ -1,0 +1,375 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary-50: #fdf2f4;
+  --color-primary-100: #fce7eb;
+  --color-primary-200: #f9d0da;
+  --color-primary-300: #f4a9bc;
+  --color-primary-400: #ec7a99;
+  --color-primary-500: #e04d78;
+  --color-primary-600: #cc2d62;
+  --color-primary-650: #b8255a;
+  --color-primary-700: #ab1f4f;
+  --color-primary-800: #8f1c46;
+  --color-primary-900: #7a1b3f;
+  --color-primary-950: #44091f;
+
+  --color-accent-50: #f5f3ff;
+  --color-accent-100: #ede9fe;
+  --color-accent-200: #ddd6fe;
+  --color-accent-300: #c4b5fd;
+  --color-accent-400: #a78bfa;
+  --color-accent-500: #8b5cf6;
+  --color-accent-600: #7c3aed;
+  --color-accent-650: #7228d8;
+  --color-accent-700: #6d28d9;
+  --color-accent-800: #5b21b6;
+  --color-accent-900: #4c1d95;
+  --color-accent-950: #2e1065;
+
+  --color-navy-50: #f0f4f8;
+  --color-navy-100: #d9e2ec;
+  --color-navy-105: #d0d9e4;
+  --color-navy-200: #bcccdc;
+  --color-navy-205: #b3c4d3;
+  --color-navy-250: #a8bac8;
+  --color-navy-300: #9fb3c8;
+  --color-navy-350: #8ea2bb;
+  --color-navy-400: #829ab1;
+  --color-navy-450: #7d8fa2;
+  --color-navy-500: #627d98;
+  --color-navy-550: #586d7c;
+  --color-navy-600: #486581;
+  --color-navy-650: #3f4c5f;
+  --color-navy-655: #3a4858;
+  --color-navy-700: #334e68;
+  --color-navy-750: #2b3649;
+  --color-navy-755: #283244;
+  --color-navy-800: #243b53;
+  --color-navy-805: #1c2837;
+  --color-navy-850: #172030;
+  --color-navy-855: #131b28;
+  --color-navy-900: #102a43;
+  --color-navy-905: #0d1520;
+  --color-navy-950: #0a1929;
+
+  --color-elder-safe: #10b981;
+  --color-elder-warning: #f59e0b;
+  --color-elder-critical: #ef4444;
+
+  --color-slate-105: #eff3f8;
+  --color-slate-205: #e0e6ee;
+  --color-slate-250: #d8dfe7;
+  --color-slate-350: #b4bcc6;
+  --color-slate-450: #7d8fa2;
+  --color-slate-550: #586d7c;
+  --color-slate-650: #3f4c5f;
+  --color-slate-750: #2b3649;
+  --color-slate-755: #283244;
+  --color-slate-805: #1c2837;
+  --color-slate-850: #172030;
+  --color-slate-855: #131b28;
+  --color-slate-905: #0d1520;
+
+  --color-rose-250: #fdb8c1;
+  --color-rose-350: #fc8a98;
+  --color-rose-450: #f75a71;
+  --color-rose-455: #f64f68;
+  --color-rose-550: #eb2d51;
+  --color-rose-650: #d01542;
+  --color-rose-750: #ae103b;
+  --color-rose-955: #3a0808;
+
+  --color-amber-650: #d97706;
+  --color-amber-955: #3a1403;
+
+  --color-emerald-250: #bee7d8;
+  --color-emerald-450: #22c990;
+  --color-emerald-650: #16a36e;
+  --color-emerald-955: #022419;
+
+  --color-orange-650: #ea580c;
+
+  --font-sans: "Inter", "system-ui", "sans-serif";
+
+  --shadow-glass: 0 8px 32px 0 rgba(16, 42, 67, 0.08);
+  --shadow-premium: 0 4px 24px -4px rgba(16, 42, 67, 0.06), 0 1px 2px rgba(16, 42, 67, 0.03);
+  --shadow-card: 0 1px 3px rgba(16, 42, 67, 0.04), 0 1px 2px rgba(16, 42, 67, 0.02);
+}
+
+/* ─── Light Theme (Default) ─────────────────────────────────────── */
+body {
+  background-color: #f8f9fc;
+  color: #102a43;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition-property: color, background-color;
+  transition-duration: 200ms;
+}
+
+/* ─── Dark Theme ────────────────────────────────────────────────── */
+html.dark body {
+  background-color: #0a1929;
+  color: #e8edf3;
+}
+
+/* ─── Glass Utility ─────────────────────────────────────────────── */
+@utility glass {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(226, 232, 240, 0.6);
+}
+
+.dark .glass {
+  background: rgba(10, 25, 41, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(48, 66, 90, 0.4);
+}
+
+/* ─── Alert Pulse Animations ────────────────────────────────────── */
+@keyframes status-pulse-green {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(16, 185, 129, 0);
+  }
+}
+
+@keyframes status-pulse-amber {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(245, 158, 11, 0);
+  }
+}
+
+@keyframes status-pulse-red {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+  }
+}
+
+@utility pulse-green {
+  animation: status-pulse-green 2s infinite;
+}
+
+@utility pulse-amber {
+  animation: status-pulse-amber 2s infinite;
+}
+
+@utility pulse-red {
+  animation: status-pulse-red 1.5s infinite;
+}
+
+/* ─── Scrollbar ─────────────────────────────────────────────────── */
+@utility no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ─── Animations ────────────────────────────────────────────────── */
+@keyframes soft-zoom {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@utility animate-soft-zoom {
+  animation: soft-zoom 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@utility animate-fade-in {
+  animation: fade-in 0.2s ease-out forwards;
+}
+
+@keyframes slide-in {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+@utility animate-slide-in {
+  animation: slide-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* ─── Accessibility ─────────────────────────────────────────────── */
+button, a, input, select, textarea, [role="button"], [role="tab"], [role="menuitem"] {
+  min-height: 44px;
+}
+
+*:focus-visible {
+  outline: 3px solid #e04d78;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: #e04d78;
+  color: white;
+  padding: 8px 16px;
+  z-index: 100;
+  font-weight: 700;
+  font-size: 14px;
+  transition: top 0.2s;
+}
+
+.skip-link:focus {
+  top: 0;
+}
+
+.text-high-contrast {
+  color: #102a43;
+}
+
+.dark .text-high-contrast {
+  color: #e8edf3;
+}
+
+.emergency-btn {
+  min-height: 56px;
+  min-width: 56px;
+  font-weight: 800;
+  font-size: 16px;
+  letter-spacing: 0.05em;
+  border-radius: 16px;
+  transition: all 150ms;
+}
+
+.emergency-btn:active {
+  transform: scale(0.97);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .pulse-green, .pulse-amber, .pulse-red {
+    animation: none !important;
+  }
+}
+
+/* ─── Global Dark Mode Input Styles ─────────────────────────────── */
+html.dark input,
+html.dark select,
+html.dark textarea {
+  background-color: #102a43 !important;
+  color: #e8edf3 !important;
+  border-color: #334e68 !important;
+}
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #829ab1 !important;
+}
+html.dark input:focus,
+html.dark select:focus,
+html.dark textarea:focus {
+  border-color: #e04d78 !important;
+  box-shadow: 0 0 0 2px rgba(224, 77, 120, 0.25) !important;
+}
+html.dark select option {
+  background-color: #102a43;
+  color: #e8edf3;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   DARK MODE TEXT CONTRAST FIXES
+   Rules:
+   - Dark background → white/light text
+   - Muted text must still have sufficient contrast
+   - No transparency that makes text unreadable
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Navy scale - brighten all muted navy shades for dark backgrounds */
+html.dark .text-navy-50 { color: #f0f4f8 !important; }
+html.dark .text-navy-100 { color: #d9e2ec !important; }
+html.dark .text-navy-200 { color: #bcccdc !important; }
+html.dark .text-navy-250 { color: #bcccdc !important; }
+html.dark .text-navy-300 { color: #d9e2ec !important; }
+html.dark .text-navy-350 { color: #d9e2ec !important; }
+html.dark .text-navy-400 { color: #bcccdc !important; }
+html.dark .text-navy-450 { color: #bcccdc !important; }
+html.dark .text-navy-500 { color: #9fb3c8 !important; }
+html.dark .text-navy-550 { color: #9fb3c8 !important; }
+html.dark .text-navy-600 { color: #bcccdc !important; }
+html.dark .text-navy-650 { color: #d9e2ec !important; }
+html.dark .text-navy-655 { color: #d9e2ec !important; }
+html.dark .text-navy-700 { color: #d9e2ec !important; }
+
+/* Primary/rose/emerald/accent color overrides for dark mode */
+html.dark .text-primary-650 { color: #f4a9bc !important; }
+html.dark .text-rose-650 { color: #fc8a98 !important; }
+html.dark .text-rose-455 { color: #fc8a98 !important; }
+html.dark .text-emerald-650 { color: #34d399 !important; }
+html.dark .text-accent-650 { color: #c4b5fd !important; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   LIGHT THEME CONTRAST GUARDS
+   Ensure text on white/light backgrounds has sufficient contrast
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* In light mode, very light text colors on white bg need darkening */
+html:not(.dark) .text-navy-300 { color: #627d98 !important; }
+html:not(.dark) .text-navy-350 { color: #586d7c !important; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   DARK MODE BACKGROUND FIXES
+   Ensure panels, cards, and inputs have proper dark backgrounds
+   ═══════════════════════════════════════════════════════════════════ */
+
+html.dark .bg-navy-850 { background-color: #172030 !important; }
+html.dark .bg-navy-855 { background-color: #131b28 !important; }
+html.dark .bg-navy-805 { background-color: #1c2837 !important; }
+html.dark .bg-navy-750 { background-color: #2b3649 !important; }
+html.dark .bg-navy-755 { background-color: #283244 !important; }
+html.dark .bg-navy-905 { background-color: #0d1520 !important; }
+
+/* Dark mode border fixes */
+html.dark .border-navy-750 { border-color: #2b3649 !important; }
+html.dark .border-navy-755 { border-color: #283244 !important; }
+html.dark .border-navy-105 { border-color: #334e68 !important; }
+html.dark .border-navy-250 { border-color: #334e68 !important; }
+html.dark .border-navy-850 { border-color: #172030 !important; }
+html.dark .border-navy-855 { border-color: #131b28 !important; }
+html.dark .border-navy-905 { border-color: #0d1520 !important; }
+
+/* Dark mode divider/separator borders */
+html.dark .divide-navy-800 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #243b53 !important;
+}

@@ -33,6 +33,7 @@ export interface MedicineBoxEvent {
   opened: boolean;
   duration: number;
   timestamp: number;
+  compartment?: number;
 }
 
 export interface BatteryEvent {

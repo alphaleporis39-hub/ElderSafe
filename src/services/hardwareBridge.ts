@@ -65,6 +65,7 @@ export interface RawMedicinePayload {
   opened: boolean;
   duration: number;
   ts: number;
+  compartment?: number;
 }
 
 export interface RawBatteryPayload {
@@ -164,6 +165,7 @@ export function normalizeMedicineBox(raw: RawMedicinePayload): SensorEvent {
     opened: raw.opened,
     duration: raw.duration,
     timestamp: raw.ts,
+    ...(raw.compartment !== undefined ? { compartment: raw.compartment } : {}),
   };
   return { type: 'medicine', data };
 }

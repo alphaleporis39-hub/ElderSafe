@@ -212,13 +212,213 @@ html.dark body {
   animation: slide-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+/* ─── Login Page Entrance Animations ───────────────────────────── */
+@keyframes login-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes login-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes login-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Utility classes with staggered delays */
+.login-anim-bg {
+  animation: login-fade-in 0.5s ease-out both;
+}
+.login-anim-logo {
+  animation: login-fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.05s both;
+}
+.login-anim-badge {
+  animation: login-fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
+}
+.login-anim-headline {
+  animation: login-fade-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
+}
+.login-anim-sub {
+  animation: login-fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.25s both;
+}
+.login-anim-illustration {
+  animation: login-fade-in 0.6s ease-out 0.2s both;
+}
+.login-anim-features {
+  animation: login-fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.32s both;
+}
+.login-anim-card {
+  animation: login-slide-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
+}
+
+/* ─── Hero Illustration — gentle ambient pulse ──────────────────── */
+@keyframes hero-pulse {
+  0%, 100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.75;
+    transform: scale(1.04);
+  }
+}
+@keyframes hero-float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-6px); }
+}
+@keyframes hero-protective-pulse {
+  0%, 100% {
+    opacity: 0.35;
+    stroke-width: 2;
+  }
+  50% {
+    opacity: 0.55;
+    stroke-width: 2.5;
+  }
+}
+@keyframes hero-heart-beat {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+}
+@keyframes hero-caregiver-pulse {
+  0%, 100% {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+@keyframes hero-connection-flow {
+  0% {
+    stroke-dashoffset: 0;
+    opacity: 0.25;
+  }
+  100% {
+    stroke-dashoffset: 20;
+    opacity: 0.15;
+  }
+}
+@keyframes hero-particle-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.5);
+  }
+  20% {
+    opacity: 0.4;
+  }
+  80% {
+    opacity: 0.2;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-18px) scale(1);
+  }
+}
+
+.hero-pulse-ring {
+  animation: hero-pulse 4s ease-in-out infinite;
+}
+.hero-float {
+  animation: hero-float 6s ease-in-out infinite;
+}
+.hero-protective-arc {
+  animation: hero-protective-pulse 3s ease-in-out infinite;
+}
+.hero-heart {
+  animation: hero-heart-beat 2.5s ease-in-out infinite;
+  transform-origin: 60px 58px;
+}
+.hero-caregiver-dot {
+  animation: hero-caregiver-pulse 2s ease-in-out infinite;
+}
+.hero-connection-line {
+  animation: hero-connection-flow 3s linear infinite;
+}
+.hero-particle {
+  animation: hero-particle-rise 3s ease-out infinite;
+}
+
+/* ─── Login Page Grid Background ────────────────────────────────── */
+.login-grid-bg {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+  background-size: 64px 64px;
+  animation: grid-drift 30s linear infinite;
+}
+
+@keyframes grid-drift {
+  0% { background-position: 0 0; }
+  100% { background-position: 64px 64px; }
+}
+
+/* ─── Feature Card Hover Lift ───────────────────────────────────── */
+.feature-card {
+  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+              box-shadow 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+              border-color 0.18s ease,
+              background-color 0.18s ease;
+}
+.feature-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px -6px rgba(0, 0, 0, 0.3);
+  border-color: rgba(255, 255, 255, 0.1);
+  background-color: rgba(255, 255, 255, 0.045);
+}
+.feature-card:hover .feature-icon {
+  transform: scale(1.08);
+  background-color: rgba(255, 255, 255, 0.08);
+}
+.feature-icon {
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+              background-color 0.2s ease;
+}
+
+/* ─── Login Button Tactile Press ────────────────────────────────── */
+.login-btn {
+  transition: background-color 0.15s ease,
+              box-shadow       0.15s ease,
+              transform        0.12s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.login-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px -4px rgba(255, 107, 122, 0.4);
+}
+.login-btn:active:not(:disabled) {
+  transform: translateY(1px) scale(0.99);
+  box-shadow: 0 2px 8px -2px rgba(255, 107, 122, 0.3);
+}
+
 /* ─── Accessibility ─────────────────────────────────────────────── */
 button, a, input, select, textarea, [role="button"], [role="tab"], [role="menuitem"] {
   min-height: 44px;
 }
 
 *:focus-visible {
-  outline: 3px solid #e04d78;
+  outline: 3px solid #FF6B7A;
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -227,7 +427,7 @@ button, a, input, select, textarea, [role="button"], [role="tab"], [role="menuit
   position: absolute;
   top: -40px;
   left: 0;
-  background: #e04d78;
+  background: #FF6B7A;
   color: white;
   padding: 8px 16px;
   z-index: 100;
@@ -283,6 +483,9 @@ button, a, input, select, textarea, [role="button"], [role="tab"], [role="menuit
   .pulse-green, .pulse-amber, .pulse-red {
     animation: none !important;
   }
+  .login-grid-bg {
+    animation: none !important;
+  }
 }
 
 /* ─── Global Dark Mode Input Styles ─────────────────────────────── */
@@ -300,8 +503,8 @@ html.dark textarea::placeholder {
 html.dark input:focus,
 html.dark select:focus,
 html.dark textarea:focus {
-  border-color: #e04d78 !important;
-  box-shadow: 0 0 0 2px rgba(224, 77, 120, 0.25) !important;
+  border-color: #FF6B7A !important;
+  box-shadow: 0 0 0 2px rgba(255, 107, 122, 0.2) !important;
 }
 html.dark select option {
   background-color: #102a43;

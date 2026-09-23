@@ -213,7 +213,27 @@ const defaultMedications: Medication[] = [
   { id: 'm1', name: 'Morning Medicine (Blood Pressure)', time: '09:00 AM', schedule: 'Daily', status: 'Taken', takenTime: '09:04 AM' },
   { id: 'm2', name: 'Afternoon Medicine (Multivitamin)', time: '01:30 PM', schedule: 'Daily', status: 'Pending' },
   { id: 'm3', name: 'Evening Medicine (Cholesterol)', time: '08:30 PM', schedule: 'Daily', status: 'Pending' },
+  { id: 'm4', name: 'Night Medicine', time: '09:00 PM', schedule: 'Daily', status: 'Pending' },
 ];
+
+// One-time migration for medication lists saved before the Night (m4) compartment existed.
+const NIGHT_MIGRATION_KEY = 'eldersafe_night_med_migrated';
+
+function withNightMedication(meds: Medication[]): Medication[] {
+  try {
+    if (localStorage.getItem(NIGHT_MIGRATION_KEY)) return meds;
+    let next = meds;
+    for (const def of defaultMedications) {
+      if (!next.some(m => m.id === def.id)) {
+        next = [...next, def];
+      }
+    }
+    localStorage.setItem(NIGHT_MIGRATION_KEY, '1');
+    return next;
+  } catch {
+    return meds;
+  }
+}
 
 // ─── Provider ────────────────────────────────────────────────────────────────
 
@@ -319,7 +339,7 @@ export const DemoProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setElderProfile(profile);
       setAlerts(savedAlerts);
       setTimeline(savedTimeline);
-      setMedications(savedMeds);
+      setMedications(withNightMedication(savedMeds));
       setSensors(savedDevices);
       setSettings(savedSettings);
       setDataLoaded(true);
@@ -543,6 +563,104 @@ export const DemoProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     });
     return unsubscribe;
+  }, [addNotification]);
+
+  // ─── Real-Time ESP32 IoT SSE Stream Listener ──────────────────────────────
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.EventSource) return;
+
+    let eventSource: EventSource | null = null;
+    let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    const connect = () => {
+      try {
+        eventSource = new EventSource('/api/devices/events/stream');
+
+        eventSource.onmessage = (event) => {
+          try {
+            if (!event.data || event.data.startsWith(':')) return;
+            const payload = JSON.parse(event.data);
+
+            if (payload.type === 'IOT_EVENT') {
+              const { event: evt, matchedMedication } = payload;
+              
+              // 1. If medication matched, update medication state
+              if (matchedMedication) {
+                setMedications(prev => prev.map(m => {
+                  if (m.id === matchedMedication.id || (evt?.compartment && m.id === `m${evt.compartment}`)) {
+                    return {
+                      ...m,
+                      status: 'Taken',
+                      takenTime: matchedMedication.takenAt || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    };
+                  }
+                  return m;
+                }));
+
+                // Add timeline entry
+                const now = new Date();
+                const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+                setTimeline(prev => [{
+                  id: `te-iot-${Date.now()}`,
+                  time: timeStr,
+                  activity: `Medicine box opened: ${matchedMedication.name} confirmed`,
+                  location: 'Kitchen',
+                  type: 'medication',
+                  severity: 'safe',
+                }, ...prev]);
+
+                addNotification('medication', `Hardware event: ${matchedMedication.name} taken via Medicine Box`);
+              }
+
+              // 2. Update sensor state for the medicine box
+              setSensors(prev => prev.map(s => {
+                if (s.name.includes('Medicine') || s.name.includes('Box') || s.id === evt?.deviceId) {
+                  return {
+                    ...s,
+                    status: (evt?.event === 'DEVICE_OFFLINE' ? 'Offline' : 'Online') as Sensor['status'],
+                    lastUpdate: 'Just now',
+                  };
+                }
+                return s;
+              }));
+            } else if (payload.type === 'HEARTBEAT' || payload.type === 'DEVICE_ONLINE') {
+              setSensors(prev => prev.map(s => {
+                if (s.name.includes('Medicine') || s.name.includes('Box') || s.id === payload.deviceId) {
+                  return { ...s, status: 'Online', lastUpdate: 'Just now' };
+                }
+                return s;
+              }));
+            } else if (payload.type === 'DEVICE_OFFLINE') {
+              setSensors(prev => prev.map(s => {
+                if (s.name.includes('Medicine') || s.name.includes('Box') || s.id === payload.deviceId) {
+                  return { ...s, status: 'Offline', lastUpdate: 'Just now' };
+                }
+                return s;
+              }));
+            }
+          } catch {
+            // ignore non-json messages
+          }
+        };
+
+        eventSource.onerror = () => {
+          if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+          }
+          reconnectTimeout = setTimeout(connect, 5000);
+        };
+      } catch {
+        // SSE not available
+      }
+    };
+
+    connect();
+
+    return () => {
+      if (eventSource) eventSource.close();
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+    };
   }, [addNotification]);
 
   // ─── Alert State Mutations (defined before useEffect that uses escalateAlert) ──

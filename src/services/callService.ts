@@ -1,5 +1,8 @@
 // ─── ElderSafe Call Service (frontend → backend → Exotel) ───────────────────
 // Never holds Exotel credentials — only talks to /api/calls on the backend.
+// All URLs go through the centralized API base (src/config/api.ts).
+
+import { apiUrl } from '../config/api';
 
 export type CallStatus =
   | 'ready'
@@ -83,13 +86,13 @@ async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
 
 export async function getCallConfig(): Promise<CallConfig> {
   const data = await jsonFetch<{ configured: boolean; webhookReady?: boolean }>(
-    '/api/calls/config'
+    apiUrl('/api/calls/config')
   );
   return { configured: Boolean(data.configured), webhookReady: data.webhookReady };
 }
 
 export async function initiateCall(payload: InitiateCallPayload): Promise<CallRecord> {
-  const data = await jsonFetch<{ success: boolean; call: CallRecord }>('/api/calls', {
+  const data = await jsonFetch<{ success: boolean; call: CallRecord }>(apiUrl('/api/calls'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -106,7 +109,7 @@ export async function initiateCall(payload: InitiateCallPayload): Promise<CallRe
 
 export async function endCall(callId: string): Promise<CallRecord> {
   const data = await jsonFetch<{ success: boolean; call: CallRecord }>(
-    `/api/calls/${encodeURIComponent(callId)}/end`,
+    apiUrl(`/api/calls/${encodeURIComponent(callId)}/end`),
     { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }
   );
   return data.call;
@@ -114,7 +117,7 @@ export async function endCall(callId: string): Promise<CallRecord> {
 
 export async function fetchCallHistory(): Promise<CallRecord[]> {
   const data = await jsonFetch<{ success: boolean; calls: CallRecord[] }>(
-    '/api/calls/history'
+    apiUrl('/api/calls/history')
   );
   return Array.isArray(data.calls) ? data.calls : [];
 }
@@ -133,7 +136,7 @@ export function subscribeToCallUpdates(
   const connect = () => {
     if (closed) return;
     try {
-      source = new EventSource('/api/calls/stream');
+      source = new EventSource(apiUrl('/api/calls/stream'));
       source.onmessage = (event) => {
         try {
           if (!event.data || event.data.startsWith(':')) return;

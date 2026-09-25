@@ -32,6 +32,13 @@ import {
 } from '../services/callService';
 import { getHardwareBridge } from '../services/hardwareBridge';
 import { getDeviceRegistry } from '../services/deviceRegistry';
+import { apiUrl } from '../config/api';
+import {
+  fetchDeviceState,
+  syncSensorsWithDevices,
+  syncMedicationsWithBackend,
+  buildTimelineEntries,
+} from '../services/deviceState';
 import {
   type ActivityBaseline,
   type ActivityAnomalyResult,
@@ -103,6 +110,10 @@ export interface Medication {
   schedule: string;
   status: 'Taken' | 'Missed' | 'Pending';
   takenTime?: string;
+  /** Set by a real MEDICINE_BOX_OPENED hardware event: box opened (access
+   *  detected) but dose not yet confirmed. Cleared once taken. */
+  accessed?: boolean;
+  accessedAt?: string;
 }
 
 export interface NotificationSettings {
@@ -614,7 +625,7 @@ export const DemoProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const connect = () => {
       try {
-        eventSource = new EventSource('/api/devices/events/stream');
+        eventSource = new EventSource(apiUrl('/api/devices/events/stream'));
 
         eventSource.onmessage = (event) => {
           try {
@@ -623,15 +634,29 @@ export const DemoProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             if (payload.type === 'IOT_EVENT') {
               const { event: evt, matchedMedication } = payload;
-              
+              // Box opened = access detected; only compartment/taken events
+              // (or the manual "Confirm Medication Taken" button) confirm a dose.
+              const isConfirmation =
+                evt?.event === 'MEDICINE_COMPARTMENT_OPENED' || evt?.event === 'MEDICINE_TAKEN';
+
               // 1. If medication matched, update medication state
               if (matchedMedication) {
+                const clockStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 setMedications(prev => prev.map(m => {
                   if (m.id === matchedMedication.id || (evt?.compartment && m.id === `m${evt.compartment}`)) {
+                    if (isConfirmation) {
+                      return {
+                        ...m,
+                        status: 'Taken',
+                        accessed: false,
+                        takenTime: matchedMedication.takenAt || clockStr,
+                      };
+                    }
+                    if (m.status === 'Taken') return m;
                     return {
                       ...m,
-                      status: 'Taken',
-                      takenTime: matchedMedication.takenAt || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                      accessed: true,
+                      accessedAt: matchedMedication.accessedAt || clockStr,
                     };
                   }
                   return m;
@@ -643,13 +668,20 @@ export const DemoProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 setTimeline(prev => [{
                   id: `te-iot-${Date.now()}`,
                   time: timeStr,
-                  activity: `Medicine box opened: ${matchedMedication.name} confirmed`,
+                  activity: isConfirmation
+                    ? `Medicine box: ${matchedMedication.name} confirmed taken`
+                    : `Medicine box opened: ${matchedMedication.name} access detected`,
                   location: 'Kitchen',
                   type: 'medication',
                   severity: 'safe',
                 }, ...prev]);
 
-                addNotification('medication', `Hardware event: ${matchedMedication.name} taken via Medicine Box`);
+                addNotification(
+                  'medication',
+                  isConfirmation
+                    ? `Hardware event: ${matchedMedication.name} taken via Medicine Box`
+                    : `Hardware event: Medicine box opened for ${matchedMedication.name} — confirm to mark taken`
+                );
               }
 
               // 2. Update sensor state for the medicine box
@@ -702,6 +734,60 @@ export const DemoProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
     };
   }, [addNotification]);
+
+  // ─── Backend state sync (GET /api/devices/state) ─────────────────────────
+  // Periodically pulls REAL device status, medicine state and recent ESP32
+  // events from the configured backend (VITE_API_BASE_URL, e.g. Railway) so the
+  // dashboard shows remote hardware activity even between SSE pushes. Errors
+  // surface once per outage via the existing notification bell — never a crash.
+  const backendHealthyRef = useRef(true);
+
+  useEffect(() => {
+    if (!dataLoaded) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const pull = async () => {
+      try {
+        const state = await fetchDeviceState();
+        if (cancelled) return;
+
+        const devices = Array.isArray(state.devices) ? state.devices : [];
+        const backendMeds = Array.isArray(state.medications) ? state.medications : [];
+        const events = Array.isArray(state.recentEvents) ? state.recentEvents : [];
+
+        setSensors(prev => syncSensorsWithDevices(prev, devices));
+        setMedications(prev => syncMedicationsWithBackend(prev, backendMeds));
+        setTimeline(prev => {
+          const entries = buildTimelineEntries(prev, events, backendMeds);
+          return entries.length > 0 ? [...entries, ...prev] : prev;
+        });
+
+        if (!backendHealthyRef.current) {
+          backendHealthyRef.current = true;
+          addNotification('gateway', 'Backend connection restored');
+        }
+      } catch (err) {
+        if (cancelled) return;
+        if (backendHealthyRef.current) {
+          backendHealthyRef.current = false;
+          addNotification(
+            'gateway',
+            err instanceof Error ? err.message : 'Backend unreachable — retrying'
+          );
+        }
+      } finally {
+        if (!cancelled) timer = setTimeout(pull, 20000);
+      }
+    };
+
+    pull();
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [dataLoaded, addNotification]);
 
   // ─── Alert State Mutations (defined before useEffect that uses escalateAlert) ──
 
@@ -1186,7 +1272,12 @@ export const DemoProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (m.id === id) {
           const nextStatus = m.status === 'Taken' ? 'Pending' : m.status === 'Pending' ? 'Taken' : 'Pending';
           const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-          return { ...m, status: nextStatus, takenTime: nextStatus === 'Taken' ? nowStr : undefined };
+          return {
+            ...m,
+            status: nextStatus,
+            accessed: false,
+            takenTime: nextStatus === 'Taken' ? nowStr : undefined,
+          };
         }
         return m;
       })

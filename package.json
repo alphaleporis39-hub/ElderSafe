@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
+    "start": "node server/standalone.cjs",
     "server": "node server/standalone.cjs"
   },
   "dependencies": {

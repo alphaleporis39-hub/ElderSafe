@@ -744,4 +744,5 @@ module.exports = {
   handleCallApiRequest,
   normalizePhone,
   getExotelConfig,
+  loadEnvFile,
 };

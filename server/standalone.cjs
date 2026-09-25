@@ -1,18 +1,40 @@
 // ─── Standalone ElderSafe IoT Backend Server ────────────────────────────────
 //
 // Allows running the ElderSafe IoT API independently of Vite (e.g. on port 3001,
-// or on a Raspberry Pi / gateway / Docker container).
+// on a Raspberry Pi / gateway / Docker container, or as a public HTTPS Node
+// service on Railway / Render / any Node host behind a TLS proxy).
 //
 // Usage:
-//   node server/standalone.cjs
+//   node server/standalone.cjs        (same as: npm start)
 //   PORT=3001 DEVICE_API_KEY=my_secret_token node server/standalone.cjs
+//
+// Environment variables:
+//   PORT            listen port (hosts inject this; local fallback 3001)
+//   HOST            bind address (default 0.0.0.0 — required for containers)
+//   DEVICE_API_KEY  bearer token the ESP32 sends as Authorization: Bearer <token>
+//   EXOTEL_*        voice calling credentials — see .env.example
+//
+// TLS is terminated by the hosting platform (Railway/Render/nginx) in front of
+// this process, so every route is reachable over public HTTPS without code
+// changes. Do not commit .env — it is git-ignored.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const http = require('http');
-const { handleCallApiRequest } = require('./callApi.cjs');
+// Requiring callApi.cjs also loads the project-root .env into process.env
+// (process.env already-set values always win).
+const { handleCallApiRequest, loadEnvFile } = require('./callApi.cjs');
 
-const PORT = process.env.PORT || 3001;
-const DEVICE_TOKEN = process.env.DEVICE_API_KEY || 'eldersafe_esp32_secret_token';
+loadEnvFile();
+
+const HOST = process.env.HOST || '0.0.0.0';
+const PORT = Number(process.env.PORT) || 3001;
+
+// Device token comes from the environment (never hardcode real secrets).
+// The literal below is only the factory placeholder shipped in the ESP32
+// firmware so an unconfigured local server still accepts a stock device.
+const DEVICE_TOKEN =
+  process.env.DEVICE_API_KEY || process.env.DEVICE_TOKEN || 'eldersafe_esp32_secret_token';
+const USING_FALLBACK_TOKEN = !process.env.DEVICE_API_KEY && !process.env.DEVICE_TOKEN;
 
 // Never log the full device token.
 function maskSecret(secret) {
@@ -177,7 +199,12 @@ const server = http.createServer(async (req, res) => {
   // GET /api/health (also /health) — simple liveness probe for browsers,
   // curl, ESP32 diagnostics, and hosting-platform uptime checks.
   if ((pathname === '/api/health' || pathname === '/health') && req.method === 'GET') {
-    return sendJson(res, 200, { success: true, service: 'ElderSafe IoT' });
+    return sendJson(res, 200, {
+      success: true,
+      status: 'ok',
+      service: 'ElderSafe IoT',
+      uptimeSec: Math.round(process.uptime()),
+    });
   }
 
   // SSE Stream
@@ -206,6 +233,61 @@ const server = http.createServer(async (req, res) => {
         missedWindowMinutes: config.missedWindowMinutes,
       },
     });
+  }
+
+  // GET /api/devices/state — full dashboard snapshot (same shape as the Vite
+  // dev middleware in src/server/iotBackend.ts). Never includes the device token.
+  if (pathname === '/api/devices/state' && req.method === 'GET') {
+    return sendJson(res, 200, {
+      success: true,
+      devices: Array.from(devices.values()),
+      medications,
+      recentEvents: events.slice(0, 20),
+      config: {
+        gracePeriodMinutes: config.gracePeriodMinutes,
+        reminderWindowMinutes: config.reminderWindowMinutes,
+        missedWindowMinutes: config.missedWindowMinutes,
+      },
+    });
+  }
+
+  // GET / POST /api/devices/config (Configurable grace/reminder/missed windows)
+  if (pathname === '/api/devices/config') {
+    if (req.method === 'GET') {
+      return sendJson(res, 200, {
+        success: true,
+        config: {
+          gracePeriodMinutes: config.gracePeriodMinutes,
+          reminderWindowMinutes: config.reminderWindowMinutes,
+          missedWindowMinutes: config.missedWindowMinutes,
+        },
+      });
+    }
+
+    if (req.method === 'POST') {
+      try {
+        const body = await parseJsonBody(req);
+        if (typeof body.gracePeriodMinutes === 'number') {
+          config.gracePeriodMinutes = body.gracePeriodMinutes;
+        }
+        if (typeof body.reminderWindowMinutes === 'number') {
+          config.reminderWindowMinutes = body.reminderWindowMinutes;
+        }
+        if (typeof body.missedWindowMinutes === 'number') {
+          config.missedWindowMinutes = body.missedWindowMinutes;
+        }
+        return sendJson(res, 200, {
+          success: true,
+          config: {
+            gracePeriodMinutes: config.gracePeriodMinutes,
+            reminderWindowMinutes: config.reminderWindowMinutes,
+            missedWindowMinutes: config.missedWindowMinutes,
+          },
+        });
+      } catch (err) {
+        return sendJson(res, 400, { success: false, error: err.message });
+      }
+    }
   }
 
   // POST /api/devices/register
@@ -418,7 +500,49 @@ const server = http.createServer(async (req, res) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`ElderSafe Standalone IoT Server running at http://localhost:${PORT}`);
+server.on('error', (err) => {
+  if (err && err.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} is already in use — set a different PORT env var.`);
+  } else {
+    console.error('Server error:', err && err.message ? err.message : err);
+  }
+  process.exit(1);
+});
+
+server.listen(PORT, HOST, () => {
+  console.log(`ElderSafe Standalone IoT Server running at http://${HOST}:${PORT}`);
+  console.log(`Health check:  GET http://localhost:${PORT}/health`);
   console.log(`Device token configured: ${maskSecret(DEVICE_TOKEN)}`);
+  if (USING_FALLBACK_TOKEN) {
+    console.warn(
+      '[warn] DEVICE_API_KEY is not set — using the firmware placeholder token. ' +
+        'Set DEVICE_API_KEY in .env / Railway variables before deploying publicly.'
+    );
+  }
+});
+
+// Hosting platforms (Railway/Render) send SIGTERM on redeploy — release the
+// port and SSE clients cleanly instead of dropping in-flight responses.
+function shutdown(signal) {
+  console.log(`${signal} received — shutting down gracefully…`);
+  for (const client of sseClients) {
+    try {
+      client.end();
+    } catch {
+      /* already closed */
+    }
+  }
+  sseClients.clear();
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(0), 5000).unref();
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
+
+// Keep the process alive on unexpected async errors — log and continue serving.
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled rejection:', reason instanceof Error ? reason.message : reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception:', err && err.stack ? err.stack : err);
 });

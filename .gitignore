@@ -26,7 +26,11 @@ dist-ssr
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+serviceAccount*.json
 
 # Local ESP32 configuration
 **/secrets.h
+**/secrets.hpp
 **/*local*.h

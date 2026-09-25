@@ -18,7 +18,18 @@ import {
   loadDevices,
   saveSettings,
   loadSettings,
+  saveCallHistory,
+  loadCallHistory,
 } from '../services/persistence';
+import {
+  getCallConfig,
+  initiateCall,
+  endCall as endCallApi,
+  subscribeToCallUpdates,
+  normalizePhone as normalizeCallPhone,
+  isTerminalStatus,
+  type CallRecord,
+} from '../services/callService';
 import { getHardwareBridge } from '../services/hardwareBridge';
 import { getDeviceRegistry } from '../services/deviceRegistry';
 import {
@@ -102,6 +113,8 @@ export interface NotificationSettings {
   sensitivity: 'Low' | 'Medium' | 'High';
   privacyMode: boolean;
   alertSoundEnabled: boolean;
+  /** When true, escalating an alert also places a real (or DEMO) call to contacts. Default OFF. */
+  autoCallEscalation: boolean;
 }
 
 export type SafetyStatus = 'SAFE' | 'WARNING' | 'CRITICAL';
@@ -174,6 +187,16 @@ export interface DemoContextType {
   updateSettings: (settings: Partial<NotificationSettings>) => void;
   addDevice: (device: Omit<Sensor, 'id'>) => void;
   toggleDeviceStatus: (id: string) => void;
+  // Outbound calling (Exotel via backend)
+  activeCall: CallRecord | null;
+  callHistory: CallRecord[];
+  exotelConfigured: boolean;
+  startCall: (
+    contact: EmergencyContact,
+    opts?: { mode?: 'real' | 'demo'; alertId?: string; chain?: string[] }
+  ) => Promise<CallRecord | null>;
+  endActiveCall: () => Promise<void>;
+  clearActiveCall: () => void;
 }
 
 const DemoContext = createContext<DemoContextType | undefined>(undefined);
@@ -241,7 +264,7 @@ export const DemoProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Theme
   const [theme, setThemeState] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('eldersafe-theme');
-    return (saved === 'light' || saved === 'dark') ? saved : 'light';
+    return (saved === 'light' || saved === 'dark') ? saved : 'dark';
   });
 
   // Alert sound
@@ -288,7 +311,13 @@ export const DemoProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     sensitivity: 'Medium',
     privacyMode: false,
     alertSoundEnabled: true,
+    autoCallEscalation: false,
   });
+
+  // ─── Outbound calling state ──────────────────────────────────────────────
+  const [activeCall, setActiveCall] = useState<CallRecord | null>(null);
+  const [callHistory, setCallHistory] = useState<CallRecord[]>([]);
+  const [exotelConfigured, setExotelConfigured] = useState(false);
 
   // Engine outputs (explainable UI)
   const [lastExplanation, setLastExplanation] = useState<DetectionExplanation | null>(null);
@@ -327,13 +356,22 @@ export const DemoProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [profile, savedAlerts, savedTimeline, savedMeds, savedDevices, savedSettings] = await Promise.all([
+      const [
+        profile,
+        savedAlerts,
+        savedTimeline,
+        savedMeds,
+        savedDevices,
+        savedSettings,
+        savedCalls,
+      ] = await Promise.all([
         loadProfile(elderProfile),
         loadAlerts(defaultAlerts),
         loadTimeline(defaultTimeline),
         loadMedications(defaultMedications),
         loadDevices(defaultSensors),
         loadSettings(settings),
+        loadCallHistory<CallRecord>([]),
       ]);
       if (cancelled) return;
       setElderProfile(profile);
@@ -341,7 +379,8 @@ export const DemoProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setTimeline(savedTimeline);
       setMedications(withNightMedication(savedMeds));
       setSensors(savedDevices);
-      setSettings(savedSettings);
+      setSettings(prev => ({ ...prev, ...savedSettings }));
+      setCallHistory(Array.isArray(savedCalls) ? savedCalls : []);
       setDataLoaded(true);
     })();
     return () => { cancelled = true; };
@@ -363,11 +402,12 @@ export const DemoProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       saveMedications(medications);
       saveDevices(sensors);
       saveSettings(settings);
+      saveCallHistory(callHistory);
     }, 500);
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-  }, [elderProfile, alerts, timeline, medications, sensors, settings, dataLoaded]);
+  }, [elderProfile, alerts, timeline, medications, sensors, settings, callHistory, dataLoaded]);
 
   // ─── Activity Intelligence: Compute anomaly on state changes ───────────
 
@@ -665,13 +705,177 @@ export const DemoProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // ─── Alert State Mutations (defined before useEffect that uses escalateAlert) ──
 
+  // ─── Outbound calling (Exotel via backend /api/calls) ────────────────────
+
+  const adoptCallRecord = useCallback((record: CallRecord) => {
+    setActiveCall(prev => {
+      if (!prev) return prev;
+      if (prev.id === record.id) return record;
+      // Adopt server record over optimistic local-* placeholder (same destination)
+      if (prev.id.startsWith('local-') && prev.to === record.to && !isTerminalStatus(prev.status)) {
+        return record;
+      }
+      return prev;
+    });
+    setCallHistory(prev => {
+      const idx = prev.findIndex(c => c.id === record.id);
+      if (idx >= 0) {
+        const next = prev.slice();
+        next[idx] = record;
+        return next;
+      }
+      // Replace optimistic local entry if present for the same number
+      const localIdx = prev.findIndex(
+        c => c.id.startsWith('local-') && c.to === record.to && !isTerminalStatus(c.status)
+      );
+      if (localIdx >= 0) {
+        const next = prev.slice();
+        next[localIdx] = record;
+        return next;
+      }
+      return [record, ...prev].slice(0, 50);
+    });
+  }, []);
+
+  const recordCallUpdate = useCallback((record: CallRecord) => {
+    adoptCallRecord(record);
+  }, [adoptCallRecord]);
+
+  const startCall = useCallback(async (
+    contact: EmergencyContact,
+    opts?: { mode?: 'real' | 'demo'; alertId?: string; chain?: string[] }
+  ): Promise<CallRecord | null> => {
+    const mode = opts?.mode || 'real';
+    const normalized = normalizeCallPhone(contact.phone);
+
+    if (!normalized) {
+      const failed: CallRecord = {
+        id: `local-invalid-${Date.now()}`,
+        to: contact.phone,
+        toLabel: contact.name,
+        contactId: contact.id,
+        status: 'failed',
+        durationSec: 0,
+        reason: 'Invalid phone number',
+        error: `"${contact.phone}" is not a valid dialable mobile number.`,
+        demo: mode === 'demo',
+        createdAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+      };
+      setActiveCall(failed);
+      recordCallUpdate(failed);
+      return failed;
+    }
+
+    // Optimistic local record so the console opens immediately (status will sync via SSE)
+    const optimistic: CallRecord = {
+      id: `local-${Date.now()}`,
+      to: normalized,
+      toLabel: contact.name,
+      contactId: contact.id,
+      alertId: opts?.alertId,
+      status: 'calling',
+      durationSec: 0,
+      reason: 'Connecting…',
+      demo: mode === 'demo',
+      escalationChain: opts?.chain || [],
+      createdAt: new Date().toISOString(),
+    };
+    setActiveCall(optimistic);
+
+    try {
+      const record = await initiateCall({
+        to: normalized,
+        toLabel: contact.name,
+        contactId: contact.id,
+        alertId: opts?.alertId,
+        mode,
+        chain: opts?.chain,
+      });
+      setActiveCall(record);
+      recordCallUpdate(record);
+      return record;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to start call';
+      const code = (err as { code?: string })?.code;
+      const failed: CallRecord = {
+        ...optimistic,
+        status: 'failed',
+        reason: code === 'EXOTEL_NOT_CONFIGURED' ? 'Exotel not configured' : 'Failed to start',
+        error: message,
+        completedAt: new Date().toISOString(),
+      };
+      setActiveCall(failed);
+      recordCallUpdate(failed);
+      return failed;
+    }
+  }, [recordCallUpdate]);
+
+  const endActiveCall = useCallback(async () => {
+    if (!activeCall) return;
+    if (activeCall.id.startsWith('local-')) {
+      const ended: CallRecord = {
+        ...activeCall,
+        status: 'completed',
+        reason: 'Ended',
+        completedAt: new Date().toISOString(),
+      };
+      setActiveCall(ended);
+      recordCallUpdate(ended);
+      return;
+    }
+    try {
+      const record = await endCallApi(activeCall.id);
+      setActiveCall(record);
+      recordCallUpdate(record);
+    } catch {
+      // network error — leave current state; user can still close console
+    }
+  }, [activeCall, recordCallUpdate]);
+
+  const clearActiveCall = useCallback(() => {
+    setActiveCall(null);
+  }, []);
+
+  // Exotel configuration status (booleans only — no secrets)
+  useEffect(() => {
+    let cancelled = false;
+    getCallConfig()
+      .then(cfg => {
+        if (!cancelled) setExotelConfigured(Boolean(cfg.configured));
+      })
+      .catch(() => {
+        if (!cancelled) setExotelConfigured(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Real-time call status from backend SSE
+  useEffect(() => {
+    return subscribeToCallUpdates(record => {
+      adoptCallRecord(record);
+    });
+  }, [adoptCallRecord]);
+
   const escalateAlert = useCallback((id: string) => {
     const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     setAlerts(prev => prev.map(a => (a.id === id ? { ...a, status: 'escalated' as const, escalatedAt: now } : a)));
     setAlertCountdown(null);
     if (countdownRef.current) clearInterval(countdownRef.current);
     addNotification('escalated', `Alert escalated — Primary caregiver has been notified. Emergency escalation recommended.`, id);
-  }, [addNotification]);
+
+    // Optional auto-call on escalation (default OFF — never dials during development unless enabled)
+    if (settings.autoCallEscalation) {
+      const contacts = elderProfile.emergencyContacts;
+      const primary = contacts.find(c => c.isPrimary) || contacts[0];
+      if (primary) {
+        const secondary = contacts.find(c => !c.isPrimary && normalizeCallPhone(c.phone));
+        const chain = secondary ? [normalizeCallPhone(secondary.phone)!] : [];
+        const mode: 'real' | 'demo' = dataMode === 'demo' ? 'demo' : 'real';
+        void startCall(primary, { mode, alertId: id, chain });
+      }
+    }
+  }, [addNotification, startCall, settings.autoCallEscalation, elderProfile.emergencyContacts, dataMode]);
 
   // ─── Countdown Timer Effect ──────────────────────────────────────────────
 
@@ -1079,6 +1283,12 @@ export const DemoProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         updateSettings,
         addDevice,
         toggleDeviceStatus,
+        activeCall,
+        callHistory,
+        exotelConfigured,
+        startCall,
+        endActiveCall,
+        clearActiveCall,
       }}
     >
       {children}

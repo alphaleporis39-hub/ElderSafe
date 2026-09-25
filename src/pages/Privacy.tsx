@@ -1,9 +1,10 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
+import { PageHeader } from '../components/ui/Primitives';
 import { 
   Shield, EyeOff, Lock, Server, Wifi, Camera, 
-  CheckCircle, Info 
+  CheckCircle, Info, Cpu, Cloud, LayoutDashboard, Antenna
 } from 'lucide-react';
 
 export const Privacy: React.FC = () => {
@@ -59,10 +60,10 @@ export const Privacy: React.FC = () => {
   ];
 
   const dataFlow = [
-    { step: '1', label: 'Sensors', detail: 'PIR, Door, Wearable collect motion data', icon: '📡' },
-    { step: '2', label: 'ESP32 Gateway', detail: 'Local processing, fall detection, anomaly scoring', icon: '🔌' },
-    { step: '3', label: 'Firebase (Optional)', detail: 'Encrypted cloud sync for remote dashboard access', icon: '☁️' },
-    { step: '4', label: 'Caregiver Dashboard', detail: 'Real-time monitoring, alerts, analytics', icon: '📱' },
+    { step: '1', label: 'Sensors', detail: 'PIR, Door, Wearable collect motion data', icon: Antenna },
+    { step: '2', label: 'ESP32 Gateway', detail: 'Local processing, fall detection, anomaly scoring', icon: Cpu },
+    { step: '3', label: 'Firebase (Optional)', detail: 'Encrypted cloud sync for remote dashboard access', icon: Cloud },
+    { step: '4', label: 'Caregiver Dashboard', detail: 'Real-time monitoring, alerts, analytics', icon: LayoutDashboard },
   ];
 
   const faq = [
@@ -92,39 +93,35 @@ export const Privacy: React.FC = () => {
     <div className="space-y-6">
       
       {/* Page Header */}
-      <div className="bg-white dark:bg-navy-900 p-6 rounded-2xl border border-navy-200 dark:border-navy-800 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-navy-900 dark:text-white tracking-tight flex items-center gap-2.5">
-            <Shield className="text-primary-500" size={28} />
-            Privacy Center
-          </h1>
-          <p className="text-navy-500 dark:text-navy-400 mt-1 font-medium">
-            How ElderSafe protects your data and respects your privacy.
-          </p>
-        </div>
-        <Badge variant="success" className="px-3.5 py-1.5 font-bold">
-          Privacy-First Design
-        </Badge>
-      </div>
+      <PageHeader
+        icon={<Shield className="text-primary-400" size={20} />}
+        title="Privacy Center"
+        description="How ElderSafe protects your data and respects your privacy."
+        actions={
+          <Badge variant="success" className="px-3 py-1.5 font-semibold">
+            Privacy-First Design
+          </Badge>
+        }
+      />
 
       {/* Privacy Principles */}
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
         {privacyPrinciples.map((principle, idx) => {
           const Icon = principle.icon;
           return (
-            <Card key={idx} className="p-5">
+            <Card key={idx} className="p-4">
               <div className="flex items-start gap-3">
-                <div className="p-2.5 rounded-xl bg-primary-50 dark:bg-primary-950/40 text-primary-500 dark:text-primary-400 shrink-0">
-                  <Icon size={20} className="stroke-[2.5]" />
+                <div className="p-2 rounded-md bg-primary-500/10 text-primary-400 shrink-0 border border-primary-500/20">
+                  <Icon size={17} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-extrabold text-navy-900 dark:text-white">{principle.title}</h3>
+                    <h3 className="text-sm font-semibold text-white">{principle.title}</h3>
                     <Badge variant={principle.badgeVariant} className="text-[9px] px-1.5 py-0.5">
                       {principle.badge}
                     </Badge>
                   </div>
-                  <p className="text-xs font-semibold text-navy-600 dark:text-navy-400 leading-relaxed">
+                  <p className="text-xs text-navy-400 leading-relaxed">
                     {principle.description}
                   </p>
                 </div>
@@ -138,7 +135,7 @@ export const Privacy: React.FC = () => {
       <Card>
         <CardHeader>
           <div>
-            <CardTitle className="text-lg">Data Flow Architecture</CardTitle>
+            <CardTitle className="text-base">Data Flow Architecture</CardTitle>
             <CardDescription>How sensor data moves through the ElderSafe system</CardDescription>
           </div>
         </CardHeader>
@@ -147,8 +144,8 @@ export const Privacy: React.FC = () => {
             {dataFlow.map((step, idx) => (
               <React.Fragment key={step.step}>
                 <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <div className="w-10 h-10 rounded-full bg-primary-100 dark:bg-primary-950 flex items-center justify-center text-lg shrink-0">
-                    {step.icon}
+                  <div className="w-10 h-10 rounded-md bg-primary-500/10 border border-primary-500/25 flex items-center justify-center text-primary-400 shrink-0">
+                    <step.icon size={18} />
                   </div>
                   <div className="min-w-0">
                     <h4 className="text-sm font-extrabold text-navy-900 dark:text-white">{step.label}</h4>
@@ -156,7 +153,7 @@ export const Privacy: React.FC = () => {
                   </div>
                 </div>
                 {idx < dataFlow.length - 1 && (
-                  <div className="hidden sm:block text-navy-300 dark:text-navy-600 text-lg shrink-0">→</div>
+                  <div className="hidden sm:block text-navy-600 text-lg shrink-0">→</div>
                 )}
               </React.Fragment>
             ))}
@@ -168,20 +165,20 @@ export const Privacy: React.FC = () => {
       <Card>
         <CardHeader>
           <div>
-            <CardTitle className="text-lg">Frequently Asked Questions</CardTitle>
+            <CardTitle className="text-base">Frequently Asked Questions</CardTitle>
             <CardDescription>Common privacy and data questions</CardDescription>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {faq.map((item, idx) => (
-            <div key={idx} className="p-4 rounded-xl bg-navy-50 dark:bg-navy-800/50 border border-navy-100 dark:border-navy-750">
+            <div key={idx} className="p-4 rounded-lg bg-navy-950/60 border border-navy-800">
               <div className="flex items-start gap-3">
-                <div className="p-1.5 rounded-lg bg-primary-50 dark:bg-primary-950/40 text-primary-500 dark:text-primary-400 shrink-0 mt-0.5">
+                <div className="p-1.5 rounded-md bg-primary-500/10 text-primary-400 shrink-0 mt-0.5">
                   <Info size={14} />
                 </div>
                 <div>
-                  <h4 className="text-sm font-extrabold text-navy-900 dark:text-white mb-1">{item.q}</h4>
-                  <p className="text-xs font-semibold text-navy-600 dark:text-navy-400 leading-relaxed">{item.a}</p>
+                  <h4 className="text-sm font-semibold text-white mb-1">{item.q}</h4>
+                  <p className="text-xs text-navy-400 leading-relaxed">{item.a}</p>
                 </div>
               </div>
             </div>
@@ -190,14 +187,14 @@ export const Privacy: React.FC = () => {
       </Card>
 
       {/* Commitment */}
-      <div className="p-6 rounded-2xl bg-gradient-to-r from-primary-50 to-emerald-50 dark:from-primary-950/20 dark:to-emerald-950/20 border border-primary-100 dark:border-primary-900/30">
+      <div className="p-5 rounded-xl bg-navy-900 border border-navy-800">
         <div className="flex items-start gap-4">
-          <div className="p-3 rounded-2xl bg-white dark:bg-navy-800 shadow-sm shrink-0">
-            <CheckCircle size={24} className="text-emerald-500" />
+          <div className="p-2.5 rounded-md bg-emerald-500/10 border border-emerald-500/25 shrink-0">
+            <CheckCircle size={20} className="text-emerald-400" />
           </div>
           <div>
-            <h3 className="text-lg font-extrabold text-navy-900 dark:text-white mb-1">Our Privacy Commitment</h3>
-            <p className="text-sm font-semibold text-navy-600 dark:text-navy-400 leading-relaxed max-w-2xl">
+            <h3 className="text-base font-semibold text-white mb-1">Our Privacy Commitment</h3>
+            <p className="text-sm text-navy-400 leading-relaxed max-w-2xl">
               ElderSafe is built on the principle that safety monitoring should never come at the cost of privacy. 
               We use the minimum data necessary, process locally where possible, and give you full control over 
               your data. No cameras. No microphones. No biometrics. Just the essential sensors needed to keep 

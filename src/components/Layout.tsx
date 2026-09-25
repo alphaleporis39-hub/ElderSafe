@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useDemo } from '../context/DemoContext';
+import { CallConsole } from './CallConsole';
 import {
   LayoutDashboard,
   Activity,
@@ -29,50 +30,92 @@ interface LayoutProps {
   children: React.ReactNode;
 }
 
+type NavGroup = {
+  label: string;
+  items: {
+    id: string;
+    name: string;
+    icon: React.ComponentType<{ size?: number | string; className?: string }>;
+    badge?: number;
+    isDemo?: boolean;
+  }[];
+};
+
 export const Layout: React.FC<LayoutProps> = ({
   currentPage,
   setCurrentPage,
   onLogout,
   children
 }) => {
-  const { safetyStatus, safetyScore, alerts, notifications, unreadCount, dismissNotification, markAllNotificationsRead } = useDemo();
+  const {
+    safetyStatus,
+    sensors,
+    statusText,
+    alerts,
+    notifications,
+    unreadCount,
+    dismissNotification,
+    markAllNotificationsRead,
+    dataMode,
+  } = useDemo();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
 
   const activeAlertsCount = alerts.filter(a => a.status === 'active').length;
+  const devicesOnline = sensors.filter(s => s.status === 'Online' || s.status === 'Active').length;
 
-  const navItems = [
-    { id: 'dashboard', name: 'Dashboard', icon: LayoutDashboard },
-    { id: 'live', name: 'Live Monitoring', icon: Activity },
-    { id: 'alerts', name: 'Alerts', icon: Bell, badge: activeAlertsCount > 0 ? activeAlertsCount : undefined },
-    { id: 'timeline', name: 'Activity Timeline', icon: Clock },
-    { id: 'analytics', name: 'Analytics', icon: LineChart },
-    { id: 'medication', name: 'Medication', icon: Pill },
-    { id: 'profile', name: 'Elder Profile', icon: User },
-    { id: 'devices', name: 'Devices', icon: Cpu },
-    { id: 'privacy', name: 'Privacy Center', icon: Shield },
-    { id: 'settings', name: 'Settings', icon: SettingsIcon },
-    { id: 'demo', name: 'Demo Simulator', icon: Play, isDemo: true }
+  const navGroups: NavGroup[] = [
+    {
+      label: 'Monitoring',
+      items: [
+        { id: 'dashboard', name: 'Dashboard', icon: LayoutDashboard },
+        { id: 'live', name: 'Live Monitoring', icon: Activity },
+        { id: 'alerts', name: 'Alerts', icon: Bell, badge: activeAlertsCount > 0 ? activeAlertsCount : undefined },
+        { id: 'timeline', name: 'Activity Timeline', icon: Clock },
+      ],
+    },
+    {
+      label: 'Care',
+      items: [
+        { id: 'analytics', name: 'Analytics', icon: LineChart },
+        { id: 'medication', name: 'Medication', icon: Pill },
+        { id: 'profile', name: 'Elder Profile', icon: User },
+      ],
+    },
+    {
+      label: 'System',
+      items: [
+        { id: 'devices', name: 'Devices', icon: Cpu },
+        { id: 'privacy', name: 'Privacy Center', icon: Shield },
+        { id: 'settings', name: 'Settings', icon: SettingsIcon },
+      ],
+    },
+    {
+      label: 'Demo',
+      items: [
+        { id: 'demo', name: 'Demo Simulator', icon: Play, isDemo: true },
+      ],
+    },
   ];
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'SAFE':
-        return 'bg-emerald-500 text-white';
+        return 'bg-emerald-600/15 text-emerald-400 border-emerald-500/30';
       case 'WARNING':
-        return 'bg-amber-500 text-white animate-pulse';
+        return 'bg-amber-500/15 text-amber-400 border-amber-500/30';
       case 'CRITICAL':
-        return 'bg-rose-500 text-white animate-bounce';
+        return 'bg-rose-600/15 text-rose-400 border-rose-500/40';
       default:
-        return 'bg-navy-400 text-white';
+        return 'bg-navy-700/40 text-navy-300 border-navy-600/40';
     }
   };
 
-  const getStatusText = (status: string) => {
+  const getStatusLabel = (status: string) => {
     switch (status) {
-      case 'SAFE': return '\u{1F7E2} SAFE';
-      case 'WARNING': return '\u{1F7E1} WARNING';
-      case 'CRITICAL': return '\u{1F534} CRITICAL';
+      case 'SAFE': return 'NORMAL';
+      case 'WARNING': return 'ATTENTION';
+      case 'CRITICAL': return 'CRITICAL';
       default: return status;
     }
   };
@@ -86,62 +129,133 @@ export const Layout: React.FC<LayoutProps> = ({
     }
   };
 
+  const renderNavButton = (item: NavGroup['items'][number], isMobile = false) => {
+    const Icon = item.icon;
+    const isActive = currentPage === item.id;
+    return (
+      <button
+        key={item.id}
+        onClick={() => {
+          setCurrentPage(item.id);
+          if (isMobile) setMobileMenuOpen(false);
+        }}
+        className={`w-full flex items-center justify-between px-2.5 ${isMobile ? 'py-2.5 text-sm' : 'py-2 text-[13px]'} rounded-lg font-medium transition-colors duration-150 ${
+          isActive
+            ? 'bg-primary-500/12 text-primary-400 border border-primary-500/25'
+            : item.isDemo
+            ? 'text-navy-400 hover:bg-navy-800/60 hover:text-navy-200 border border-transparent'
+            : 'text-navy-300 hover:bg-navy-800/70 hover:text-white border border-transparent'
+        }`}
+        aria-current={isActive ? 'page' : undefined}
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          <Icon size={15} className={isActive ? 'text-primary-400 shrink-0' : 'opacity-70 shrink-0'} />
+          <span className="truncate">{item.name}</span>
+        </div>
+        {item.badge !== undefined && (
+          <span
+            className={`px-1.5 py-0.5 rounded text-[10px] font-bold leading-none ${
+              isActive ? 'bg-primary-500/20 text-primary-300' : 'bg-rose-600 text-white'
+            }`}
+            aria-label={`${item.badge} alerts`}
+          >
+            {item.badge}
+          </span>
+        )}
+      </button>
+    );
+  };
+
+  const navContent = (
+    <nav aria-label="Main navigation" className="space-y-5">
+      {navGroups.map(group => (
+        <div key={group.label}>
+          <div className="px-2.5 mb-1.5 text-[10px] font-semibold text-navy-500 uppercase tracking-[0.14em]">
+            {group.label}
+          </div>
+          <div className="space-y-0.5">
+            {group.items.map(item => renderNavButton(item))}
+          </div>
+        </div>
+      ))}
+    </nav>
+  );
+
   return (
-    <div className="min-h-screen bg-[#f8f9fc] dark:bg-navy-950 flex flex-col font-sans">
+    <div className="min-h-screen bg-navy-950 flex flex-col font-sans text-navy-100">
       <a href="#main-content" className="skip-link">
         Skip to main content
       </a>
 
-      {/* Top Navbar */}
-      <header className="sticky top-0 z-40 bg-white/80 dark:bg-navy-900/80 backdrop-blur-xl border-b border-navy-100/60 dark:border-navy-800/60 px-4 sm:px-6 py-3.5 flex items-center justify-between" role="banner">
-        <div className="flex items-center gap-3">
+      {/* Top header — ElderSafe | status | devices | notifications | caregiver */}
+      <header
+        className="sticky top-0 z-40 bg-navy-950/95 backdrop-blur border-b border-navy-800 px-3 sm:px-5 py-2.5 flex items-center justify-between gap-3"
+        role="banner"
+      >
+        <div className="flex items-center gap-3 min-w-0">
           <button
             onClick={() => setMobileMenuOpen(true)}
-            className="md:hidden text-navy-500 dark:text-navy-300 p-1.5 hover:bg-navy-100 dark:hover:bg-navy-800 rounded-lg transition-colors"
+            className="md:hidden text-navy-300 p-1.5 hover:bg-navy-800 rounded-lg transition-colors"
             aria-label="Open navigation menu"
           >
-            <Menu size={22} />
+            <Menu size={20} />
           </button>
-          
+
           <div className="flex items-center gap-2.5">
-            <div className="bg-gradient-to-br from-primary-500 to-primary-600 p-2 rounded-xl text-white shadow-sm" aria-hidden="true">
+            <div className="bg-navy-800 border border-navy-700 p-1.5 rounded-lg text-primary-400" aria-hidden="true">
               <div className="flex items-center gap-0.5">
-                <Shield size={16} className="stroke-[2.5]" />
-                <Heart size={10} className="fill-white stroke-white" />
+                <Shield size={15} className="stroke-[2]" />
+                <Heart size={9} className="fill-primary-400 stroke-primary-400 -ml-1" />
               </div>
             </div>
-            <span className="text-lg font-bold tracking-tight text-navy-900 dark:text-white sm:block hidden">
-              Elder<span className="text-primary-500">Safe</span>
+            <span className="text-sm font-semibold tracking-tight text-white hidden sm:block">
+              Elder<span className="text-primary-400">Safe</span>
             </span>
           </div>
+
+          {/* System status */}
+          <div
+            className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[11px] font-semibold tracking-wide ${getStatusColor(safetyStatus)}`}
+            title={statusText}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full bg-current ${getPulseClass(safetyStatus)}`} aria-hidden="true" />
+            <span>System {getStatusLabel(safetyStatus)}</span>
+          </div>
+
+          {/* Devices connected */}
+          <div
+            className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-navy-800 bg-navy-900 text-[11px] font-medium text-navy-300"
+            title={`${devicesOnline} of ${sensors.length} devices reporting`}
+          >
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${devicesOnline === sensors.length ? 'bg-emerald-500' : 'bg-amber-500'}`}
+              aria-hidden="true"
+            />
+            {devicesOnline}/{sensors.length} Devices
+          </div>
+
+          {dataMode === 'hardware' && (
+            <span className="hidden xl:inline-flex items-center px-2 py-0.5 rounded border border-emerald-600/40 bg-emerald-500/10 text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
+              Live Hardware
+            </span>
+          )}
         </div>
 
-        {/* Status Indicator Bar */}
-        <div className="flex items-center gap-3 sm:gap-5">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-navy-400 dark:text-navy-400 font-medium hidden sm:inline">Monitoring</span>
-            <div className={`relative px-3.5 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 shadow-sm ${getStatusColor(safetyStatus)}`}>
-              <span className={`absolute inline-flex h-2 w-2 rounded-full bg-white ${getPulseClass(safetyStatus)}`} />
-              <span className="pl-3 tracking-wider">{getStatusText(safetyStatus)}</span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-1 bg-primary-50 dark:bg-primary-950/30 px-2.5 py-1 rounded-lg border border-primary-100 dark:border-primary-900/40">
-            <span className="text-[10px] text-primary-500 font-bold uppercase tracking-wider">Score</span>
-            <span className="text-sm font-extrabold text-primary-600 dark:text-primary-400">{safetyScore}</span>
-          </div>
-
-          {/* Notification Bell */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Notifications */}
           <div className="relative">
             <button
               onClick={() => setNotifOpen(!notifOpen)}
-              className="relative p-2 rounded-xl hover:bg-navy-100 dark:hover:bg-navy-800 transition-colors"
+              className="relative p-2 rounded-lg hover:bg-navy-800 transition-colors text-navy-300"
               aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ''}`}
               aria-expanded={notifOpen}
             >
-              <Bell size={18} className="text-navy-500 dark:text-navy-300" aria-hidden="true" />
+              <Bell size={17} aria-hidden="true" />
               {unreadCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 bg-primary-500 text-white text-[8px] font-extrabold w-4 h-4 flex items-center justify-center rounded-full border-2 border-white dark:border-navy-900" aria-hidden="true">
+                <span
+                  className="absolute -top-0.5 -right-0.5 bg-primary-500 text-white text-[8px] font-bold w-4 h-4 flex items-center justify-center rounded-full border-2 border-navy-950"
+                  aria-hidden="true"
+                >
                   {unreadCount}
                 </span>
               )}
@@ -150,13 +264,13 @@ export const Layout: React.FC<LayoutProps> = ({
             {notifOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setNotifOpen(false)} />
-                <div className="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-navy-900 rounded-2xl border border-navy-100 dark:border-navy-700/50 shadow-xl z-50 overflow-hidden">
-                  <div className="flex items-center justify-between p-4 border-b border-navy-100 dark:border-navy-800">
-                    <h3 className="text-sm font-bold text-navy-900 dark:text-white">Notifications</h3>
+                <div className="absolute right-0 top-full mt-2 w-80 bg-navy-900 rounded-xl border border-navy-700 shadow-xl z-50 overflow-hidden">
+                  <div className="flex items-center justify-between p-3.5 border-b border-navy-800">
+                    <h3 className="text-sm font-semibold text-white">Notifications</h3>
                     {unreadCount > 0 && (
                       <button
                         onClick={() => markAllNotificationsRead()}
-                        className="text-[10px] font-bold text-primary-500 hover:text-primary-600 dark:text-primary-400 hover:underline"
+                        className="text-[10px] font-semibold text-primary-400 hover:text-primary-300"
                       >
                         Mark all read
                       </button>
@@ -164,7 +278,7 @@ export const Layout: React.FC<LayoutProps> = ({
                   </div>
                   <div className="max-h-80 overflow-y-auto">
                     {notifications.length === 0 ? (
-                      <div className="p-6 text-center text-sm text-navy-400 font-medium">
+                      <div className="p-6 text-center text-sm text-navy-500">
                         No notifications yet
                       </div>
                     ) : (
@@ -172,7 +286,7 @@ export const Layout: React.FC<LayoutProps> = ({
                         const getNotifIcon = () => {
                           switch (n.type) {
                             case 'fall': return <AlertTriangle size={14} className="text-rose-500" />;
-                            case 'escalated': return <ArrowUpCircle size={14} className="text-primary-500" />;
+                            case 'escalated': return <ArrowUpCircle size={14} className="text-primary-400" />;
                             case 'acknowledged': return <CheckCircle size={14} className="text-emerald-500" />;
                             case 'resolved': return <CheckCircle size={14} className="text-emerald-500" />;
                             default: return <Info size={14} className="text-amber-500" />;
@@ -181,21 +295,20 @@ export const Layout: React.FC<LayoutProps> = ({
                         return (
                           <div
                             key={n.id}
-                            className={`px-4 py-3 border-b border-navy-50 dark:border-navy-800/50 flex items-start gap-3 transition-colors ${
-                              !n.read ? 'bg-primary-50/40 dark:bg-primary-950/10' : ''
+                            className={`px-3.5 py-3 border-b border-navy-800/80 flex items-start gap-3 transition-colors ${
+                              !n.read ? 'bg-primary-500/5' : ''
                             }`}
                           >
                             <div className="mt-0.5 shrink-0">{getNotifIcon()}</div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-xs font-medium text-navy-700 dark:text-navy-200 leading-relaxed">
-                                {n.message}
-                              </p>
-                              <span className="text-[10px] font-bold text-navy-400 mt-0.5 block">{n.time}</span>
+                              <p className="text-xs text-navy-200 leading-relaxed">{n.message}</p>
+                              <span className="text-[10px] text-navy-500 mt-0.5 block">{n.time}</span>
                             </div>
                             {!n.read && (
                               <button
                                 onClick={(e) => { e.stopPropagation(); dismissNotification(n.id); }}
-                                className="text-[10px] font-bold text-navy-400 hover:text-navy-600 shrink-0"
+                                className="text-[10px] font-semibold text-navy-500 hover:text-navy-300 shrink-0"
+                                aria-label="Dismiss notification"
                               >
                                 ✓
                               </button>
@@ -210,137 +323,78 @@ export const Layout: React.FC<LayoutProps> = ({
             )}
           </div>
 
-          <div className="flex items-center gap-3 pl-3 border-l border-navy-200 dark:border-navy-700">
-            <div className="hidden lg:block text-right">
-              <div className="text-xs font-semibold text-navy-800 dark:text-white">Caregiver</div>
-              <div className="text-[10px] text-navy-400 dark:text-navy-400">Sharma Family</div>
+          {/* Caregiver */}
+          <div className="flex items-center gap-2.5 pl-2 border-l border-navy-800">
+            <div className="hidden sm:block text-right leading-tight">
+              <div className="text-[11px] font-medium text-navy-200">Caregiver</div>
+              <div className="text-[10px] text-navy-500">Sharma Family</div>
             </div>
-            <div className="h-8 w-8 rounded-full bg-gradient-to-br from-primary-100 to-accent-100 dark:from-primary-950 dark:to-accent-950 flex items-center justify-center font-bold text-primary-600 dark:text-primary-400 text-xs border border-primary-200/50 dark:border-primary-800/50">
+            <div className="h-7 w-7 rounded-md bg-navy-800 border border-navy-700 flex items-center justify-center font-semibold text-primary-400 text-xs">
               C
             </div>
           </div>
         </div>
       </header>
 
-      {/* Main Container */}
+      {/* Main shell */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar - Desktop */}
-        <aside className="hidden md:flex flex-col w-60 bg-white dark:bg-navy-900/60 border-r border-navy-100/60 dark:border-navy-800/60 p-3 justify-between" role="navigation" aria-label="Main navigation">
-          <div className="space-y-4">
-            <div className="px-2.5">
-              <div className="text-[10px] font-bold text-navy-600 dark:text-navy-400 uppercase tracking-widest">Navigation</div>
-            </div>
-            <nav className="space-y-0.5" aria-label="Main navigation">
-              {navItems.map(item => {
-                const Icon = item.icon;
-                const isActive = currentPage === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => setCurrentPage(item.id)}
-                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-[13px] font-semibold tracking-wide transition-all duration-150 ${
-                      isActive
-                        ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-md shadow-primary-200/30 dark:shadow-primary-900/20'
-                        : item.isDemo
-                        ? 'bg-accent-50 hover:bg-accent-100 text-accent-700 dark:bg-accent-950/20 dark:text-accent-300 border border-accent-200/40 dark:border-accent-800/30'
-                        : 'text-navy-700 dark:text-navy-200 hover:bg-navy-100 dark:hover:bg-navy-800/50 hover:text-navy-900 dark:hover:text-white'
-                    }`}
-                    aria-current={isActive ? 'page' : undefined}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <Icon size={16} className={isActive ? 'stroke-[2.5]' : 'opacity-80'} aria-hidden="true" />
-                      <span>{item.name}</span>
-                    </div>
-                    {item.badge !== undefined && (
-                      <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
-                        isActive 
-                          ? 'bg-white/20 text-white' 
-                          : 'bg-primary-500 text-white'
-                      }`} aria-label={`${item.badge} alerts`}>
-                        {item.badge}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </nav>
-          </div>
+        {/* Desktop sidebar */}
+        <aside
+          className="hidden md:flex flex-col w-56 bg-navy-950 border-r border-navy-800 p-3 justify-between overflow-y-auto no-scrollbar"
+          role="navigation"
+          aria-label="Main navigation"
+        >
+          <div>{navContent}</div>
 
           <button
             onClick={onLogout}
-            className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[13px] font-semibold text-navy-600 hover:bg-rose-50 dark:text-navy-300 dark:hover:bg-rose-950/20 hover:text-rose-600 transition-colors"
+            className="w-full flex items-center gap-2.5 px-2.5 py-2.5 mt-4 rounded-lg text-[13px] font-medium text-navy-400 hover:bg-rose-500/10 hover:text-rose-400 transition-colors border border-transparent"
             aria-label="Sign out of ElderSafe"
           >
-            <LogOut size={16} aria-hidden="true" />
+            <LogOut size={15} aria-hidden="true" />
             <span>Sign Out</span>
           </button>
         </aside>
 
-        {/* Mobile Sliding Navigation Drawer */}
+        {/* Mobile drawer */}
         {mobileMenuOpen && (
           <div className="fixed inset-0 z-50 md:hidden flex">
             <div
-              className="fixed inset-0 bg-navy-950/40 backdrop-blur-sm"
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm"
               onClick={() => setMobileMenuOpen(false)}
             />
-            
-            <div className="relative w-72 max-w-sm bg-white dark:bg-navy-900 h-full p-5 flex flex-col justify-between shadow-2xl z-10 animate-slide-in">
+
+            <div className="relative w-72 max-w-sm bg-navy-950 h-full p-4 flex flex-col justify-between border-r border-navy-800 shadow-2xl z-10 animate-slide-in overflow-y-auto">
               <div className="space-y-5">
-                <div className="flex items-center justify-between border-b border-navy-100 dark:border-navy-800 pb-4">
+                <div className="flex items-center justify-between border-b border-navy-800 pb-3">
                   <div className="flex items-center gap-2.5">
-                    <div className="bg-gradient-to-br from-primary-500 to-primary-600 p-2 rounded-xl text-white">
+                    <div className="bg-navy-800 border border-navy-700 p-1.5 rounded-lg text-primary-400">
                       <div className="flex items-center gap-0.5">
-                        <Shield size={16} />
-                        <Heart size={9} className="fill-white stroke-white" />
+                        <Shield size={14} />
+                        <Heart size={8} className="fill-primary-400 stroke-primary-400 -ml-0.5" />
                       </div>
                     </div>
-                    <span className="text-lg font-bold text-navy-900 dark:text-white">
-                      Elder<span className="text-primary-500 font-extrabold">Safe</span>
+                    <span className="text-sm font-semibold text-white">
+                      Elder<span className="text-primary-400">Safe</span>
                     </span>
                   </div>
                   <button
                     onClick={() => setMobileMenuOpen(false)}
-                    className="p-1 text-navy-400 hover:text-navy-600 dark:hover:text-navy-200 rounded-full hover:bg-navy-100 dark:hover:bg-navy-800"
+                    className="p-1 text-navy-400 hover:text-navy-200 rounded-full hover:bg-navy-800"
                     aria-label="Close navigation menu"
                   >
-                    <X size={20} aria-hidden="true" />
+                    <X size={18} />
                   </button>
                 </div>
 
-                <nav className="space-y-0.5">
-                  {navItems.map(item => {
-                    const Icon = item.icon;
-                    const isActive = currentPage === item.id;
-                    return (
-                      <button
-                        key={item.id}
-                        onClick={() => {
-                          setCurrentPage(item.id);
-                          setMobileMenuOpen(false);
-                        }}
-                        className={`w-full flex items-center justify-between px-3 py-3 rounded-xl text-sm font-semibold transition-all ${
-                          isActive
-                            ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-md'
-                            : item.isDemo
-                            ? 'bg-accent-50 text-accent-700 border border-accent-200 dark:bg-accent-950/20 dark:text-accent-300 dark:border-accent-800/30'
-                            : 'text-navy-700 dark:text-navy-200 hover:bg-navy-100 dark:hover:bg-navy-800/50 hover:text-navy-900'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <Icon size={18} />
-                          <span>{item.name}</span>
-                        </div>
-                        {item.badge !== undefined && (
-                          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
-                            isActive ? 'bg-white/20 text-white' : 'bg-primary-500 text-white'
-                          }`}>
-                            {item.badge}
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </nav>
+                <div
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border text-[11px] font-semibold ${getStatusColor(safetyStatus)}`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full bg-current ${getPulseClass(safetyStatus)}`} aria-hidden="true" />
+                  System {getStatusLabel(safetyStatus)} · {devicesOnline}/{sensors.length} devices
+                </div>
+
+                {navContent}
               </div>
 
               <button
@@ -348,22 +402,30 @@ export const Layout: React.FC<LayoutProps> = ({
                   onLogout();
                   setMobileMenuOpen(false);
                 }}
-                className="w-full flex items-center gap-2.5 px-3 py-3 rounded-xl text-sm font-semibold text-navy-400 hover:bg-rose-50 dark:hover:bg-rose-950/20 hover:text-rose-600 transition-colors"
+                className="w-full flex items-center gap-2.5 px-2.5 py-2.5 mt-4 rounded-lg text-sm font-medium text-navy-400 hover:bg-rose-500/10 hover:text-rose-400 transition-colors border border-transparent"
               >
-                <LogOut size={18} />
+                <LogOut size={16} />
                 <span>Sign Out</span>
               </button>
             </div>
           </div>
         )}
 
-        {/* Content Area */}
-        <main id="main-content" className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 no-scrollbar bg-[#f8f9fc] dark:bg-navy-950" role="main" aria-label="Main content">
-          <div className="max-w-7xl mx-auto space-y-6 animate-fade-in">
+        {/* Content */}
+        <main
+          id="main-content"
+          className="flex-1 overflow-y-auto p-3 sm:p-5 lg:p-6 no-scrollbar bg-navy-950"
+          role="main"
+          aria-label="Main content"
+        >
+          <div className="max-w-7xl mx-auto space-y-5 animate-fade-in">
             {children}
           </div>
         </main>
       </div>
+
+      {/* Global emergency call console (renders only when a call is active) */}
+      <CallConsole />
     </div>
   );
 };

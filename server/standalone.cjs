@@ -9,9 +9,30 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 const http = require('http');
+const { handleCallApiRequest } = require('./callApi.cjs');
 
 const PORT = process.env.PORT || 3001;
 const DEVICE_TOKEN = process.env.DEVICE_API_KEY || 'eldersafe_esp32_secret_token';
+
+// Never log the full device token.
+function maskSecret(secret) {
+  if (!secret) return '(unset)';
+  if (secret.length <= 8) return '****';
+  return `${secret.slice(0, 4)}****${secret.slice(-2)}`;
+}
+
+// Normalize the request path so common URL variants still route correctly:
+//   "//api/devices/events"  → "/api/devices/events"  (double slash)
+//   "/api/devices/events/"  → "/api/devices/events"  (trailing slash)
+// Without this, ESP32 requests whose SERVER_URL ends with "/" get HTTP 404.
+function normalizePathname(rawUrl) {
+  let path = String(rawUrl || '/');
+  const qIndex = path.indexOf('?');
+  if (qIndex >= 0) path = path.slice(0, qIndex);
+  path = path.replace(/\/{2,}/g, '/');
+  if (path.length > 1 && path.endsWith('/')) path = path.slice(0, -1);
+  return path || '/';
+}
 
 // In-memory state
 const devices = new Map();
@@ -141,8 +162,7 @@ function checkAuthorization(req) {
 }
 
 const server = http.createServer(async (req, res) => {
-  const parsedUrl = new URL(req.url, `http://localhost:${PORT}`);
-  const pathname = parsedUrl.pathname;
+  const pathname = normalizePathname(req.url);
 
   // CORS preflight
   if (req.method === 'OPTIONS') {
@@ -152,6 +172,12 @@ const server = http.createServer(async (req, res) => {
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     });
     return res.end();
+  }
+
+  // GET /api/health (also /health) — simple liveness probe for browsers,
+  // curl, ESP32 diagnostics, and hosting-platform uptime checks.
+  if ((pathname === '/api/health' || pathname === '/health') && req.method === 'GET') {
+    return sendJson(res, 200, { success: true, service: 'ElderSafe IoT' });
   }
 
   // SSE Stream
@@ -174,7 +200,11 @@ const server = http.createServer(async (req, res) => {
       success: true,
       devices: Array.from(devices.values()),
       medications,
-      config,
+      config: {
+        gracePeriodMinutes: config.gracePeriodMinutes,
+        reminderWindowMinutes: config.reminderWindowMinutes,
+        missedWindowMinutes: config.missedWindowMinutes,
+      },
     });
   }
 
@@ -356,11 +386,39 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // 404
-  return sendJson(res, 404, { success: false, error: `Endpoint ${pathname} not found` });
+  // Call API (Exotel) — shared module
+  if (pathname.startsWith('/api/calls')) {
+    try {
+      const handled = await handleCallApiRequest(req, res);
+      if (handled) return;
+    } catch (err) {
+      return sendJson(res, 500, {
+        success: false,
+        error: err && err.message ? err.message : 'Call service error',
+      });
+    }
+  }
+
+  // 404 — include the valid route list so misconfigured clients
+  // (e.g. ESP32 with a wrong SERVER_URL path) are self-diagnosing.
+  return sendJson(res, 404, {
+    success: false,
+    error: `Endpoint ${pathname} not found`,
+    availableEndpoints: [
+      'GET  /api/health',
+      'GET  /api/devices',
+      'GET  /api/devices/events/stream',
+      'POST /api/devices/register',
+      'POST /api/devices/heartbeat',
+      'POST /api/devices/events',
+      'GET/POST /api/devices/config',
+      'GET  /api/calls/config | /api/calls/stream | /api/calls/history',
+      'POST /api/calls | /api/calls/webhook | /api/calls/:id/end',
+    ],
+  });
 });
 
 server.listen(PORT, () => {
   console.log(`ElderSafe Standalone IoT Server running at http://localhost:${PORT}`);
-  console.log(`Device Token configured: ${DEVICE_TOKEN}`);
+  console.log(`Device token configured: ${maskSecret(DEVICE_TOKEN)}`);
 });

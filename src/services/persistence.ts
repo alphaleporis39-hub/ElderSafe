@@ -209,3 +209,20 @@ export async function loadSettings<T>(fallback: T): Promise<T> {
   }
   return lsGet('settings', fallback);
 }
+
+// ─── Call history ──────────────────────────────────────────────────────────
+
+export async function saveCallHistory(calls: Persistable[]): Promise<void> {
+  if (firebaseAvailable && db) {
+    try {
+      await saveCollection('call_history', calls);
+    } catch { /* continue */ }
+  }
+  lsSet('call_history', calls);
+}
+
+export async function loadCallHistory<T extends Persistable>(fallback: T[]): Promise<T[]> {
+  const result = await loadCollection<T>('call_history');
+  if (result && result.length > 0) return result;
+  return lsGet('call_history', fallback);
+}

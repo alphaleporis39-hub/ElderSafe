@@ -29,13 +29,16 @@
 
 // ─── CONFIGURE THESE ─────────────────────────────────────────────────────────
 
-#define WIFI_SSID        "Infinix NOTE 50X 5G"
-#define WIFI_PASSWORD    "mohit555"
+#define WIFI_SSID        "iPhone (2)"
+#define WIFI_PASSWORD    "12345678"
 
-// ElderSafe backend base URL.
-// DEV  (Vite dev server, same network): "http://192.168.1.XXX:5173"
-// PROD (standalone server):             "http://192.168.1.XXX:3001"
-#define SERVER_URL       "http://192.168.1.18:5173"
+
+// ElderSafe backend base URL — MUST point at the backend API server.
+// Standalone backend (this repo):        "http://192.168.x.x:3001"  ← node server/standalone.cjs
+// Optional Vite dev API (same Wi-Fi):    "http://192.168.x.x:5173"  ← npm run dev
+// Production (public HTTPS backend):     "https://your-backend.example.com"
+// Do NOT add a trailing slash.
+#define SERVER_URL       "http://172.20.10.3:3001"
 
 // Must match DEVICE_API_KEY on the server (default: "eldersafe_esp32_secret_token")
 #define DEVICE_TOKEN     "eldersafe_esp32_secret_token"

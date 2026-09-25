@@ -1,30 +1,54 @@
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { createRequire } from 'node:module'
 import { handleIotApiRequest } from './src/server/iotBackend.ts'
+
+const require = createRequire(import.meta.url)
+const { handleCallApiRequest } = require('./server/callApi.cjs') as {
+  handleCallApiRequest: (req: unknown, res: unknown) => Promise<boolean>
+}
 
 function iotBackendPlugin(): Plugin {
   return {
     name: 'iot-backend-plugin',
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
-        if (req.url && req.url.startsWith('/api/devices')) {
-          const handled = await handleIotApiRequest(req, res);
-          if (handled) return;
+        const url = req.url || ''
+        if (url.startsWith('/api/calls')) {
+          try {
+            const handled = await handleCallApiRequest(req, res)
+            if (handled) return
+          } catch {
+            // fall through to next handler
+          }
         }
-        next();
-      });
+        if (url.startsWith('/api/devices')) {
+          const handled = await handleIotApiRequest(req, res)
+          if (handled) return
+        }
+        next()
+      })
     },
     configurePreviewServer(server) {
       server.middlewares.use(async (req, res, next) => {
-        if (req.url && req.url.startsWith('/api/devices')) {
-          const handled = await handleIotApiRequest(req, res);
-          if (handled) return;
+        const url = req.url || ''
+        if (url.startsWith('/api/calls')) {
+          try {
+            const handled = await handleCallApiRequest(req, res)
+            if (handled) return
+          } catch {
+            // fall through to next handler
+          }
         }
-        next();
-      });
+        if (url.startsWith('/api/devices')) {
+          const handled = await handleIotApiRequest(req, res)
+          if (handled) return
+        }
+        next()
+      })
     },
-  };
+  }
 }
 
 // https://vite.dev/config/

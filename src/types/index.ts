@@ -156,6 +156,37 @@ export interface TimelineEvent {
   severity: 'safe' | 'warning' | 'critical';
 }
 
+// ─── Calling (Exotel outbound) ───────────────────────────────────────────────
+
+export type CallStatus =
+  | 'ready'
+  | 'calling'
+  | 'ringing'
+  | 'connected'
+  | 'completed'
+  | 'failed'
+  | 'no_answer';
+
+export interface CallRecord {
+  id: string;
+  to: string;
+  toLabel?: string;
+  contactId?: string | null;
+  alertId?: string | null;
+  status: CallStatus;
+  durationSec: number;
+  reason?: string | null;
+  error?: string | null;
+  demo: boolean;
+  escalationChain?: string[];
+  escalatedFrom?: string | null;
+  createdAt: string;
+  updatedAt?: string;
+  connectedAt?: string | null;
+  completedAt?: string | null;
+  exotelCallSid?: string | null;
+}
+
 // ─── Routine Profile ─────────────────────────────────────────────────────────
 
 export interface RoutineWindow {

@@ -1,7 +1,8 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useDemo } from '../context/DemoContext';
 import { Card, CardContent, CardHeader } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
+import { PageHeader } from '../components/ui/Primitives';
 import {
   Play,
   CheckCircle,
@@ -15,21 +16,15 @@ import {
   RotateCcw,
   AlertTriangle,
   Phone,
-  PhoneOff,
   MapPin,
   X,
   Bell,
   ArrowUpCircle,
-  Volume2,
-  VolumeX,
-  Mic,
-  MicOff,
 } from 'lucide-react';
 
 export const DemoMode: React.FC = () => {
   const {
     safetyStatus,
-    safetyScore,
     statusText,
     lastExplanation,
     lastAssessments,
@@ -47,15 +42,12 @@ export const DemoMode: React.FC = () => {
     acknowledgeAlert,
     escalateAlert,
     resolveAlert,
+    startCall,
+    activeCall,
+    clearActiveCall,
   } = useDemo();
 
   const [showEmergency, setShowEmergency] = useState(false);
-  const [callActive, setCallActive] = useState(false);
-  const [callStatus, setCallStatus] = useState<'calling' | 'connected' | 'ended'>('calling');
-  const [callTimer, setCallTimer] = useState(0);
-  const [callMuted, setCallMuted] = useState(false);
-  const [callSpeaker, setCallSpeaker] = useState(true);
-  const callIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const activeAlert = activeAlertId ? alerts.find(a => a.id === activeAlertId) : null;
   const isAcknowledged = activeAlert?.status === 'acknowledged';
@@ -70,64 +62,24 @@ export const DemoMode: React.FC = () => {
   useEffect(() => {
     if (safetyStatus !== 'CRITICAL') {
       setShowEmergency(false);
-      // Also end any active call by clearing interval directly
-      if (callIntervalRef.current) {
-        clearInterval(callIntervalRef.current);
-        callIntervalRef.current = null;
+      // Preserve prior behavior: clear any open demo call when emergency state clears.
+      // Real (non-demo) calls are left for the user / provider to complete.
+      if (activeCall && activeCall.demo) {
+        clearActiveCall();
       }
-      setCallActive(false);
-      setCallStatus('ended');
-      setCallTimer(0);
     }
-  }, [safetyStatus]);
+  }, [safetyStatus, activeCall, clearActiveCall]);
 
-  // Cleanup call interval on unmount
-  useEffect(() => {
-    return () => {
-      if (callIntervalRef.current) clearInterval(callIntervalRef.current);
-    };
-  }, []);
+  /** Demo Simulator places calls through the same backend pipeline, always labeled DEMO. */
+  const startDemoCall = useCallback((
+    contact: { id: string; name: string; relation: string; phone: string; isPrimary: boolean },
+    alertId?: string
+  ) => {
+    void startCall(contact, { mode: 'demo', alertId });
+  }, [startCall]);
 
-  const startCall = useCallback(() => {
-    setCallActive(true);
-    setCallStatus('calling');
-    setCallTimer(0);
-    setCallMuted(false);
-    setCallSpeaker(true);
-
-    // Simulate connection after 2 seconds
-    setTimeout(() => {
-      setCallStatus('connected');
-    }, 2000);
-  }, []);
-
-  const endCall = useCallback(() => {
-    if (callIntervalRef.current) {
-      clearInterval(callIntervalRef.current);
-      callIntervalRef.current = null;
-    }
-    setCallActive(false);
-    setCallStatus('ended');
-    setCallTimer(0);
-  }, []);
-
-  // Call timer effect
-  useEffect(() => {
-    if (callActive && callStatus === 'connected') {
-      callIntervalRef.current = setInterval(() => {
-        setCallTimer(prev => prev + 1);
-      }, 1000);
-      return () => {
-        if (callIntervalRef.current) clearInterval(callIntervalRef.current);
-      };
-    }
-  }, [callActive, callStatus]);
-
-  const formatCallTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
-    const s = (seconds % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
-  };
+  const primaryContact =
+    elderProfile.emergencyContacts.find(c => c.isPrimary) || elderProfile.emergencyContacts[0];
 
   // Deduce which simulator is active based on state
   const getActiveSimulator = () => {
@@ -150,7 +102,7 @@ export const DemoMode: React.FC = () => {
     {
       id: 'normal',
       name: 'Simulate Normal Activity',
-      description: 'Restores all sensors online, clears pending active alerts, sets score to 96, and logs a standard check-in.',
+      description: 'Restores all sensors online, clears pending active alerts, returns status to Normal, and logs a standard check-in.',
       trigger: simulateNormalActivity,
       severity: 'success',
       icon: CheckCircle,
@@ -160,7 +112,7 @@ export const DemoMode: React.FC = () => {
     {
       id: 'medication',
       name: 'Simulate Missed Medication',
-      description: 'Triggers a Warning. Marks morning pill as Missed, drops score, and raises an active alert for skipped medication.',
+      description: 'Triggers a Warning. Marks morning pill as Missed and raises an active alert for skipped medication.',
       trigger: simulateMissedMedication,
       severity: 'warning',
       icon: Clock,
@@ -170,7 +122,7 @@ export const DemoMode: React.FC = () => {
     {
       id: 'inactivity',
       name: 'Simulate Prolonged Inactivity',
-      description: 'Triggers a Warning. Sets Bedroom PIR to Inactive (6 hours), drops score, and raises an inactivity notification.',
+      description: 'Triggers a Warning. Sets Bedroom PIR to Inactive (6 hours) and raises an inactivity notification.',
       trigger: simulateProlongedInactivity,
       severity: 'warning',
       icon: Activity,
@@ -180,7 +132,7 @@ export const DemoMode: React.FC = () => {
     {
       id: 'deviation',
       name: 'Simulate Routine Deviation',
-      description: 'Injects unusual nighttime kitchen sensor activation. Triggers a Warning and reduces the safety score.',
+      description: 'Injects unusual nighttime kitchen sensor activation and triggers a Warning for routine deviation.',
       trigger: simulateRoutineDeviation,
       severity: 'warning',
       icon: HelpCircle,
@@ -190,7 +142,7 @@ export const DemoMode: React.FC = () => {
     {
       id: 'fall',
       name: 'Simulate Possible Fall',
-      description: 'Triggers CRITICAL state. Simulates high-g wearable impact and immobility. Score drops. Flashes emergency UI.',
+      description: 'Triggers CRITICAL state. Simulates high-g wearable impact and immobility. Flashes emergency UI.',
       trigger: simulateFall,
       severity: 'danger',
       icon: ShieldAlert,
@@ -200,7 +152,7 @@ export const DemoMode: React.FC = () => {
     {
       id: 'multiple',
       name: 'Simulate Multiple Anomalies',
-      description: 'Simulates Gateway/Wearable offline + missed medicine + inactivity. Drops score significantly. Triggers Critical state.',
+      description: 'Simulates Gateway/Wearable offline + missed medicine + inactivity. Triggers Critical state.',
       trigger: simulateMultipleAnomalies,
       severity: 'danger',
       icon: PowerOff,
@@ -209,151 +161,52 @@ export const DemoMode: React.FC = () => {
     }
   ];
 
-  // ─── Call Simulation Overlay ──────────────────────────────────────────────
-  if (callActive) {
-    return (
-      <div className="fixed inset-0 z-[60] bg-navy-950 flex flex-col items-center justify-between p-6 sm:p-10 animate-fade-in">
-        {/* Demo Label */}
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-accent-950/60 border border-accent-800/40 text-accent-300 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest">
-          DEMO SIMULATION — NOT A REAL CALL
-        </div>
-
-        {/* Top Section - Status */}
-        <div className="flex flex-col items-center gap-4 pt-8">
-          {/* Pulsing avatar */}
-          <div className={`relative w-24 h-24 rounded-full bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center ${callStatus === 'calling' ? 'animate-pulse' : ''}`}>
-            <span className="text-3xl font-black text-white">MS</span>
-            {callStatus === 'connected' && (
-              <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-emerald-500 border-4 border-navy-950 flex items-center justify-center">
-                <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
-              </div>
-            )}
-          </div>
-
-          <div className="text-center space-y-1">
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-white">
-              {callStatus === 'calling' ? 'Calling Elder' : callStatus === 'connected' ? 'Connected' : 'Call Ended'}
-            </h2>
-            <p className="text-lg font-semibold text-primary-400">{elderProfile.name}</p>
-            {callStatus === 'calling' && (
-              <p className="text-sm text-navy-400 animate-pulse mt-2">Ringing...</p>
-            )}
-            {callStatus === 'connected' && (
-              <p className="text-sm font-mono font-bold text-emerald-400 mt-2">{formatCallTime(callTimer)}</p>
-            )}
-          </div>
-        </div>
-
-        {/* Middle - Call Info */}
-        <div className="flex flex-col items-center gap-3">
-          {callStatus === 'calling' && (
-            <div className="flex items-center gap-2 text-navy-400 text-xs font-bold">
-              <div className="flex gap-1">
-                <span className="w-1.5 h-4 bg-primary-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-1.5 h-6 bg-primary-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="w-1.5 h-4 bg-primary-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                <span className="w-1.5 h-6 bg-primary-400 rounded-full animate-bounce" style={{ animationDelay: '450ms' }} />
-                <span className="w-1.5 h-4 bg-primary-400 rounded-full animate-bounce" style={{ animationDelay: '600ms' }} />
-              </div>
-            </div>
-          )}
-          {callStatus === 'connected' && (
-            <div className="text-center text-xs text-navy-500 font-semibold">
-              Simulated audio channel — no real connection established
-            </div>
-          )}
-        </div>
-
-        {/* Bottom - Controls */}
-        <div className="flex flex-col items-center gap-6 pb-8 w-full max-w-sm">
-          {/* Control buttons */}
-          {callStatus === 'connected' && (
-            <div className="flex items-center justify-center gap-6">
-              <button
-                onClick={() => setCallMuted(!callMuted)}
-                className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${
-                  callMuted
-                    ? 'bg-rose-600 text-white'
-                    : 'bg-navy-800 text-navy-300 hover:bg-navy-700'
-                }`}
-                aria-label={callMuted ? 'Unmute microphone' : 'Mute microphone'}
-              >
-                {callMuted ? <MicOff size={22} /> : <Mic size={22} />}
-              </button>
-              <button
-                onClick={() => setCallSpeaker(!callSpeaker)}
-                className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${
-                  !callSpeaker
-                    ? 'bg-rose-600 text-white'
-                    : 'bg-navy-800 text-navy-300 hover:bg-navy-700'
-                }`}
-                aria-label={callSpeaker ? 'Turn off speaker' : 'Turn on speaker'}
-              >
-                {callSpeaker ? <Volume2 size={22} /> : <VolumeX size={22} />}
-              </button>
-            </div>
-          )}
-
-          {/* End Call Button */}
-          <button
-            onClick={endCall}
-            className="w-full py-4 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl text-base font-extrabold flex items-center justify-center gap-2 transition-colors shadow-lg shadow-rose-900/30"
-            aria-label="End call"
-          >
-            <PhoneOff size={20} />
-            End Call
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // Call overlay is now handled globally by <CallConsole /> in Layout
+  // (Demo Simulator always uses mode: 'demo' — clearly labeled DEMO).
 
   return (
     <div className="space-y-6">
       
       {/* Page Header */}
-      <div className="bg-white dark:bg-navy-900 p-6 rounded-2xl border border-navy-200 dark:border-navy-800 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-navy-900 dark:text-white tracking-tight flex items-center gap-2.5">
-            <Play className="text-primary-500" size={28} />
-            Demo Mode Simulator
-          </h1>
-          <p className="text-navy-500 dark:text-navy-400 mt-1 font-medium">
-            Test the ElderSafe detection engine by injecting sensor events. Each trigger runs through the full simulation pipeline.
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={resetSimulation}
-            className="flex items-center gap-2 px-4 py-2 bg-navy-100 dark:bg-navy-800 hover:bg-navy-200 dark:hover:bg-navy-700 text-navy-700 dark:text-navy-200 rounded-xl text-sm font-bold transition-colors border border-navy-200 dark:border-navy-700"
-            aria-label="Reset simulation to default state"
-          >
-            <RotateCcw size={14} aria-hidden="true" />
-            Reset
-          </button>
-          <div className={`px-4 py-2 rounded-xl text-sm font-extrabold ${
-            safetyStatus === 'SAFE' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-            safetyStatus === 'WARNING' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
-            'bg-rose-50 text-rose-700 border border-rose-200'
-          }`}>
-            Score: {safetyScore}/100
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        icon={<Play className="text-primary-400" size={20} />}
+        title="Demo Mode Simulator"
+        description="Test the ElderSafe detection engine by injecting sensor events. Each trigger runs through the full simulation pipeline."
+        actions={
+          <>
+            <button
+              onClick={resetSimulation}
+              className="flex items-center gap-2 px-3.5 py-2 bg-navy-800 hover:bg-navy-700 text-navy-200 rounded-lg text-sm font-semibold transition-colors border border-navy-700"
+              aria-label="Reset simulation to default state"
+            >
+              <RotateCcw size={14} aria-hidden="true" />
+              Reset
+            </button>
+            <div className={`px-3.5 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 border ${
+              safetyStatus === 'SAFE' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' :
+              safetyStatus === 'WARNING' ? 'bg-amber-500/10 text-amber-400 border-amber-500/30' :
+              'bg-rose-500/10 text-rose-400 border-rose-500/30'
+            }`}>
+              <span className={`w-2 h-2 rounded-full ${safetyStatus === 'SAFE' ? 'bg-emerald-500' : safetyStatus === 'WARNING' ? 'bg-amber-500 animate-pulse' : 'bg-rose-500 animate-pulse'}`} aria-hidden="true" />
+              {safetyStatus === 'SAFE' ? 'Status: Normal' : safetyStatus === 'WARNING' ? 'Status: Attention' : 'Status: Critical'}
+            </div>
+          </>
+        }
+      />
 
       {/* Detection Explanation Panel */}
       {lastExplanation && (
-        <Card className="border-primary-200 dark:border-primary-900/50 bg-primary-50/30 dark:bg-primary-950/10">
+        <Card className="border-primary-500/25 bg-primary-500/5">
           <CardHeader>
             <div className="flex items-center gap-3">
-              <div className="bg-primary-100 dark:bg-primary-950 p-2.5 rounded-xl text-primary-500 dark:text-primary-400">
-                <Brain size={20} className="stroke-[2.5]" />
+              <div className="bg-primary-500/10 p-2 rounded-md text-primary-400">
+                <Brain size={18} />
               </div>
               <div>
-                <h3 className="text-base font-extrabold text-navy-900 dark:text-white">
+                <h3 className="text-sm font-semibold text-white">
                   Detection Engine Explanation
                 </h3>
-                <p className="text-[10px] text-navy-450 dark:text-navy-400 font-bold uppercase tracking-wider">
+                <p className="text-[10px] text-navy-500 font-semibold uppercase tracking-wider">
                   Why this alert was triggered
                 </p>
               </div>
@@ -361,14 +214,14 @@ export const DemoMode: React.FC = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Summary */}
-            <div className="bg-white dark:bg-navy-900 p-4 rounded-xl border border-navy-105 dark:border-navy-800">
-              <p className="text-sm font-semibold text-navy-700 dark:text-navy-300 leading-relaxed">
+            <div className="bg-navy-950/60 p-4 rounded-lg border border-navy-800">
+              <p className="text-sm text-navy-300 leading-relaxed">
                 {lastExplanation.summary}
               </p>
               {lastExplanation.confidence !== undefined && (
                 <div className="mt-2 flex items-center gap-2">
-                  <span className="text-xs font-bold text-navy-500">Confidence:</span>
-                  <div className="flex-1 h-2 bg-navy-100 dark:bg-navy-800 rounded-full overflow-hidden">
+                  <span className="text-xs font-semibold text-navy-500">Confidence:</span>
+                  <div className="flex-1 h-2 bg-navy-800 rounded-full overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all duration-500 ${
                         lastExplanation.confidence > 80 ? 'bg-rose-500' :
@@ -378,7 +231,7 @@ export const DemoMode: React.FC = () => {
                       style={{ width: `${lastExplanation.confidence}%` }}
                     />
                   </div>
-                  <span className="text-sm font-extrabold text-navy-900 dark:text-white">
+                  <span className="text-sm font-semibold text-white">
                     {lastExplanation.confidence}%
                   </span>
                 </div>
@@ -388,14 +241,14 @@ export const DemoMode: React.FC = () => {
             {/* Factors */}
             {lastExplanation.factors.length > 0 && (
               <div className="space-y-2">
-                <h4 className="text-xs font-extrabold text-navy-500 dark:text-navy-400 uppercase tracking-wider">
+                <h4 className="text-xs font-semibold text-navy-400 uppercase tracking-wider">
                   Detection Factors:
                 </h4>
                 <div className="space-y-1.5">
                   {lastExplanation.factors.map((factor, idx) => (
                     <div key={idx} className="flex items-start gap-2 text-xs">
-                      <ChevronRight size={12} className="text-primary-500 mt-0.5 shrink-0" />
-                      <span className="text-navy-600 dark:text-navy-400 font-medium leading-relaxed">
+                      <ChevronRight size={12} className="text-primary-400 mt-0.5 shrink-0" />
+                      <span className="text-navy-300 leading-relaxed">
                         {factor}
                       </span>
                     </div>
@@ -406,12 +259,12 @@ export const DemoMode: React.FC = () => {
 
             {/* Risk Assessments Summary */}
             {lastAssessments.length > 0 && (
-              <div className="flex flex-wrap gap-2 pt-2 border-t border-navy-105 dark:border-navy-800">
+              <div className="flex flex-wrap gap-2 pt-2 border-t border-navy-800">
                 {lastAssessments.map((a, idx) => (
                   <Badge
                     key={idx}
                     variant={a.level === 'critical' ? 'danger' : a.level === 'warning' ? 'warning' : 'success'}
-                    className="text-[10px] font-bold"
+                    className="text-[10px] font-semibold"
                   >
                     {a.type}
                   </Badge>
@@ -431,28 +284,28 @@ export const DemoMode: React.FC = () => {
           return (
             <Card 
               key={scenario.id} 
-              className={`flex flex-col justify-between transition-all duration-300 ${
+              className={`flex flex-col justify-between transition-colors ${
                 isActive 
-                  ? 'ring-4 ring-primary-500 border-transparent shadow-xl translate-y-[-4px]' 
-                  : 'border-navy-200 hover:shadow-md'
+                  ? 'ring-2 ring-primary-500 border-primary-500/40' 
+                  : 'border-navy-800 hover:border-navy-700'
               }`}
             >
               <CardHeader className="pb-2">
                 <div className="flex justify-between items-start w-full">
-                  <div className={`p-2.5 rounded-xl border ${
+                  <div className={`p-2 rounded-md border ${
                     isActive
                       ? 'bg-primary-600 text-white border-primary-600'
                       : scenario.severity === 'success'
-                      ? 'bg-emerald-50 border-emerald-200 text-emerald-600 dark:bg-emerald-955/20'
+                      ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-400'
                       : scenario.severity === 'warning'
-                      ? 'bg-amber-50 border-amber-200 text-amber-600 dark:bg-amber-955/20'
-                      : 'bg-rose-50 border-rose-200 text-rose-600 dark:bg-rose-955/20'
+                      ? 'bg-amber-500/10 border-amber-500/25 text-amber-400'
+                      : 'bg-rose-500/10 border-rose-500/25 text-rose-400'
                   }`}>
-                    <Icon size={20} className="stroke-[2.5]" />
+                    <Icon size={17} />
                   </div>
                   
                   {isActive && (
-                    <Badge variant={scenario.severity as 'success' | 'warning' | 'danger'} className="font-extrabold text-[9px] px-2.5 py-0.5 tracking-wider animate-pulse">
+                    <Badge variant={scenario.severity as 'success' | 'warning' | 'danger'} className="font-semibold text-[9px] px-2.5 py-0.5 tracking-wider">
                       ACTIVE STATE
                     </Badge>
                   )}
@@ -461,20 +314,20 @@ export const DemoMode: React.FC = () => {
               
               <CardContent className="mt-4 flex-1 flex flex-col justify-between gap-6">
                 <div className="space-y-1.5">
-                  <h3 className="text-base font-extrabold text-navy-900 dark:text-white leading-tight">
+                  <h3 className="text-sm font-semibold text-white leading-tight">
                     {scenario.name}
                   </h3>
-                  <span className="text-[10px] text-navy-400 font-bold uppercase tracking-wider block">
+                  <span className="text-[10px] text-navy-500 font-semibold uppercase tracking-wider block">
                     Telemetry Type: {scenario.badgeText}
                   </span>
-                  <p className="text-xs font-semibold text-navy-655 dark:text-navy-400 leading-relaxed pt-2">
+                  <p className="text-xs text-navy-400 leading-relaxed pt-2">
                     {scenario.description}
                   </p>
                 </div>
 
                 <button
                   onClick={scenario.trigger}
-                  className={`w-full py-3 rounded-xl text-sm font-extrabold shadow-sm transition-all uppercase tracking-wider ${scenario.btnStyle}`}
+                  className={`w-full py-2.5 rounded-lg text-sm font-semibold transition-colors uppercase tracking-wider ${scenario.btnStyle}`}
                   aria-label={`Trigger ${scenario.name} simulation`}
                 >
                   Trigger Simulation
@@ -634,17 +487,33 @@ export const DemoMode: React.FC = () => {
 
               {/* Emergency Contacts */}
               <div className="bg-navy-50 dark:bg-navy-800/60 p-4 rounded-xl border border-navy-100 dark:border-navy-800">
-                <h4 className="text-xs font-extrabold text-navy-500 dark:text-navy-400 uppercase tracking-wider mb-2">
-                  Emergency Contacts
-                </h4>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-xs font-extrabold text-navy-500 dark:text-navy-400 uppercase tracking-wider">
+                    Emergency Contacts
+                  </h4>
+                  <span className="text-[9px] font-black text-accent-600 dark:text-accent-400 uppercase tracking-widest">
+                    Demo calls
+                  </span>
+                </div>
                 <div className="space-y-2">
                   {elderProfile.emergencyContacts.map((contact) => (
-                    <div key={contact.id} className="flex items-center justify-between">
-                      <div>
+                    <div key={contact.id} className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
                         <span className="text-sm font-bold text-navy-800 dark:text-navy-200">{contact.name}</span>
                         <span className="text-xs text-navy-400 dark:text-navy-400 ml-2">{contact.relation}</span>
                       </div>
-                      <span className="text-xs font-bold text-navy-500 dark:text-navy-400 font-mono">{contact.phone}</span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-xs font-bold text-navy-500 dark:text-navy-400 font-mono">{contact.phone}</span>
+                        <button
+                          onClick={() => startDemoCall(contact, activeAlertId || undefined)}
+                          className="flex items-center gap-1 px-2 py-1 rounded-lg bg-primary-600 hover:bg-primary-500 text-white text-[10px] font-bold transition-colors"
+                          aria-label={`Demo call to ${contact.name}`}
+                          title="Places a DEMO call through the same pipeline (not a real phone call)"
+                        >
+                          <Phone size={11} aria-hidden="true" />
+                          Call Contact
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -661,12 +530,14 @@ export const DemoMode: React.FC = () => {
             {/* Footer - 4 Action Buttons */}
             <div className="p-5 pt-0 grid grid-cols-2 gap-3" role="group" aria-label="Emergency response actions">
               <button
-                onClick={startCall}
+                onClick={() => {
+                  if (primaryContact) startDemoCall(primaryContact, activeAlertId || undefined);
+                }}
                 className="emergency-btn py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2"
-                aria-label="Call the elder to check on their status"
+                aria-label="Place a demo call to the primary emergency contact"
               >
                 <Phone size={14} aria-hidden="true" />
-                Call Elder
+                Call Contact
               </button>
               <button
                 onClick={() => {

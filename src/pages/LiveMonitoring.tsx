@@ -2,168 +2,171 @@ import React from 'react';
 import { useDemo } from '../context/DemoContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
-import { Eye, Heart, Radio } from 'lucide-react';
+import { PageHeader } from '../components/ui/Primitives';
+import { Eye, Heart, Radio, Cpu, Wifi, WifiOff, Clock } from 'lucide-react';
 
 export const LiveMonitoring: React.FC = () => {
-  const { safetyStatus, sensors, statusText } = useDemo();
+  const { safetyStatus, sensors, statusText, timeline, dataMode, elderProfile } = useDemo();
 
-  // Deduce current location of the elder from context state
   const getCurrentLocation = () => {
     const textUpper = statusText.toUpperCase();
     if (textUpper.includes('BATHROOM') || textUpper.includes('FALL')) return 'Bathroom';
     if (textUpper.includes('BEDROOM') || textUpper.includes('INACTIVITY')) return 'Bedroom';
     if (textUpper.includes('KITCHEN') || textUpper.includes('MEDICATION') || textUpper.includes('MEDICINE')) return 'Kitchen';
     if (textUpper.includes('DOOR') || textUpper.includes('ENTRANCE')) return 'Entrance';
-    return 'Living Room'; // Default
+    return 'Living Room';
   };
 
   const currentRoom = getCurrentLocation();
 
-  // Helper to extract sensor info
   const getRoomSensor = (roomName: string) => {
     switch (roomName) {
       case 'Bedroom':
         return sensors.find(s => s.id === 's3');
-      case 'Bathroom':
-        // Wearable acts as fall/activity detector for bathroom, or mock a Bathroom PIR
-        return { name: 'Bathroom Assist', status: safetyStatus === 'CRITICAL' ? 'Active' : 'Online', battery: 85, lastUpdate: 'Just now' };
       case 'Kitchen':
         return sensors.find(s => s.id === 's5');
       case 'Living Room':
         return sensors.find(s => s.id === 's4');
       case 'Entrance':
         return sensors.find(s => s.id === 's6');
+      case 'Bathroom':
+        return sensors.find(s => s.name.includes('Wearable'));
       default:
         return undefined;
     }
   };
 
   const rooms = [
-    { name: 'Bedroom', size: 'col-span-1 row-span-1', color: 'bg-primary-50/20' },
-    { name: 'Bathroom', size: 'col-span-1 row-span-1', color: 'bg-rose-50/10' },
-    { name: 'Living Room', size: 'col-span-1 row-span-1 md:col-span-2', color: 'bg-navy-50/20' },
-    { name: 'Kitchen', size: 'col-span-1 row-span-1', color: 'bg-amber-50/10' },
-    { name: 'Entrance', size: 'col-span-1 md:col-span-3', color: 'bg-emerald-50/10' }
+    { name: 'Bedroom' },
+    { name: 'Bathroom' },
+    { name: 'Living Room' },
+    { name: 'Kitchen' },
+    { name: 'Entrance' },
   ];
 
-  return (
-    <div className="space-y-6">
-      
-      {/* Page Header */}
-      <div className="bg-white dark:bg-navy-900 p-6 rounded-2xl border border-navy-200 dark:border-navy-800 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-navy-900 dark:text-white tracking-tight flex items-center gap-2.5">
-            <Eye className="text-primary-500" size={28} />
-            Live Home Monitoring
-          </h1>
-          <p className="text-navy-500 dark:text-navy-400 mt-1 font-medium">
-            Visual spatial telemetry and room status indicators.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge variant="success" className="px-3 py-1 font-bold">
-            Live Stream
-          </Badge>
-          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
-        </div>
-      </div>
+  const gateway = sensors.find(s => s.name.includes('Gateway') || s.name.includes('ESP32'));
+  const wearable = sensors.find(s => s.name.includes('Wearable'));
+  const onlineCount = sensors.filter(s => s.status === 'Online' || s.status === 'Active').length;
+  const isGatewayOffline = gateway?.status === 'Offline';
 
-      <div className="grid lg:grid-cols-3 gap-6">
-        
-        {/* Spatial Home Layout Blueprint */}
+  const systemStatus =
+    safetyStatus === 'CRITICAL' ? 'CRITICAL' : safetyStatus === 'WARNING' ? 'ATTENTION' : 'NORMAL';
+
+  return (
+    <div className="space-y-5">
+      <PageHeader
+        icon={<Eye className="text-primary-400" size={20} />}
+        title="Live Monitoring"
+        description="Room map, device links, and live event stream from application state."
+        actions={
+          <>
+            {dataMode === 'demo' && (
+              <Badge variant="warning">DEMO DATA</Badge>
+            )}
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-navy-700 bg-navy-900 text-[11px] font-semibold text-navy-200">
+              <span className={`w-1.5 h-1.5 rounded-full ${safetyStatus === 'SAFE' ? 'bg-emerald-500 pulse-green' : safetyStatus === 'WARNING' ? 'bg-amber-500 pulse-amber' : 'bg-rose-500 pulse-red'}`} />
+              {systemStatus}
+            </div>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-navy-700 bg-navy-900 text-[11px] font-medium text-navy-300">
+              <Cpu size={12} />
+              {gateway ? (isGatewayOffline ? 'Gateway offline' : 'Gateway online') : 'No gateway'}
+            </div>
+          </>
+        }
+      />
+
+      <div className="grid lg:grid-cols-3 gap-4">
+        {/* Room map */}
         <Card className="lg:col-span-2">
           <CardHeader>
             <div>
-              <CardTitle className="text-xl">Home Layout Blueprint</CardTitle>
-              <CardDescription>Spatial telemetry distribution (Mohan's active room is highlighted)</CardDescription>
+              <CardTitle>Home Layout</CardTitle>
+              <CardDescription>
+                {elderProfile.name} last associated with {currentRoom} · from status text
+              </CardDescription>
             </div>
-            <div className="flex flex-wrap gap-2 text-xs font-semibold text-navy-500">
-              <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> Active/Normal</span>
-              <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-amber-500" /> Inactive/Deviation</span>
-              <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-rose-500" /> Emergency Alert</span>
-              <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-primary-650" /> Mohan's Location</span>
+            <div className="flex flex-wrap gap-2 text-[10px] text-navy-500">
+              <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Normal</span>
+              <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Attention</span>
+              <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-rose-500" /> Critical</span>
+              <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-primary-500" /> Elder zone</span>
             </div>
           </CardHeader>
-          <CardContent className="pb-6">
-            
-            {/* House Blueprint Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-4 border-dashed border-navy-200 dark:border-navy-800 rounded-3xl p-6 bg-navy-50/50 dark:bg-navy-900/10 min-h-[420px]">
+          <CardContent className="pb-5">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 border border-dashed border-navy-700 rounded-lg p-4 bg-navy-950/40 min-h-[360px]">
               {rooms.map((room) => {
                 const sensor = getRoomSensor(room.name);
                 const isElderHere = currentRoom === room.name;
-                const isRoomCritical = safetyStatus === 'CRITICAL' && room.name === currentRoom;
-                const isRoomWarning = safetyStatus === 'WARNING' && room.name === currentRoom;
-                
+                const isRoomCritical = safetyStatus === 'CRITICAL' && isElderHere;
+                const isRoomWarning = safetyStatus === 'WARNING' && isElderHere;
+                const sensorOffline = sensor?.status === 'Offline';
+
                 return (
                   <div
                     key={room.name}
-                    className={`relative p-5 rounded-2xl border-2 transition-all duration-300 flex flex-col justify-between overflow-hidden ${room.size} ${
+                    className={`relative p-4 rounded-lg border transition-colors flex flex-col justify-between min-h-[140px] ${
+                      room.name === 'Living Room' ? 'md:col-span-2' : ''
+                    } ${
                       isRoomCritical
-                        ? 'border-rose-500 bg-rose-50/40 dark:bg-rose-955/10 shadow-lg shadow-rose-100 dark:shadow-none'
+                        ? 'border-rose-500/50 bg-rose-500/5'
                         : isRoomWarning
-                        ? 'border-amber-500 bg-amber-50/40 dark:bg-amber-955/10 shadow-md shadow-amber-100'
+                        ? 'border-amber-500/40 bg-amber-500/5'
                         : isElderHere
-                        ? 'border-primary-600 bg-primary-50/30 dark:bg-primary-950/10'
-                        : 'border-navy-200 bg-white dark:bg-navy-900 dark:border-navy-800'
+                        ? 'border-primary-500/40 bg-primary-500/5'
+                        : 'border-navy-800 bg-navy-900/60'
                     }`}
                   >
-                    
-                    {/* Header */}
-                    <div className="flex justify-between items-start z-10">
-                      <div>
-                        <h4 className="text-base font-extrabold text-navy-800 dark:text-navy-100">{room.name}</h4>
-                        <span className="text-[10px] text-navy-400 dark:text-navy-500 font-bold uppercase tracking-wider block mt-0.5">
-                          {sensor?.name || 'Passive Zone'}
+                    <div className="flex justify-between items-start gap-2">
+                      <div className="min-w-0">
+                        <h4 className="text-sm font-semibold text-white">{room.name}</h4>
+                        <span className="text-[10px] text-navy-500 block mt-0.5 truncate">
+                          {sensor?.name || 'Zone (no direct sensor map)'}
                         </span>
                       </div>
-                      
-                      {/* Active Indicator Pulse */}
                       {isElderHere && (
-                        <div className="flex items-center gap-1.5 bg-primary-100 text-primary-600 dark:bg-primary-950 dark:text-primary-400 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider animate-pulse">
-                          <Heart size={10} className="fill-primary-600 dark:fill-primary-400" />
-                          Elder Present
-                        </div>
+                        <span className="flex items-center gap-1 bg-primary-500/15 text-primary-300 px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider border border-primary-500/30 shrink-0">
+                          <Heart size={9} className="fill-current" />
+                          Present
+                        </span>
                       )}
                     </div>
 
-                    {/* Sensor Telemetry */}
-                    <div className="mt-8 flex justify-between items-end z-10">
+                    <div className="mt-4 flex justify-between items-end gap-2">
                       <div className="space-y-1">
-                        <span className="text-[10px] text-navy-400 font-bold block uppercase tracking-wider">Telemetry:</span>
+                        <span className="text-[9px] text-navy-600 font-semibold uppercase tracking-wider">Sensor</span>
                         <div className="flex items-center gap-1.5">
-                          <span className={`h-2 w-2 rounded-full ${
+                          <span className={`h-1.5 w-1.5 rounded-full ${
                             isRoomCritical
-                              ? 'bg-rose-600 pulse-red'
+                              ? 'bg-rose-500'
                               : isRoomWarning
-                              ? 'bg-amber-500 pulse-amber'
-                              : sensor?.status === 'Offline'
-                              ? 'bg-navy-400'
-                              : 'bg-emerald-500 pulse-green'
+                              ? 'bg-amber-500'
+                              : sensorOffline || !sensor
+                              ? 'bg-navy-600'
+                              : 'bg-emerald-500'
                           }`} />
-                          <span className="text-xs font-bold text-navy-700 dark:text-navy-350">
-                            {isRoomCritical ? 'CRITICAL ALERT' : isRoomWarning ? 'WARNING ALERT' : sensor?.status || 'Online'}
+                          <span className="text-[11px] font-medium text-navy-200">
+                            {isRoomCritical
+                              ? 'Critical alert zone'
+                              : isRoomWarning
+                              ? 'Attention zone'
+                              : sensor
+                              ? sensor.status
+                              : 'Unmapped'}
                           </span>
                         </div>
                       </div>
 
                       <div className="text-right">
                         {sensor?.battery !== undefined && (
-                          <span className="text-[10px] text-navy-500 font-semibold block">
-                            🔋 {sensor.battery}% battery
+                          <span className="text-[10px] text-navy-500 block">
+                            Battery {sensor.battery}%
                           </span>
                         )}
-                        <span className="text-[10px] text-navy-400 block mt-0.5">
-                          Updated: {sensor?.lastUpdate || 'N/A'}
+                        <span className="text-[10px] text-navy-600 block mt-0.5">
+                          {sensor?.lastUpdate || '—'}
                         </span>
                       </div>
                     </div>
-
-                    {/* Background Visual Wave/Pulse */}
-                    {isElderHere && (
-                      <div className={`absolute bottom-0 right-0 h-24 w-24 rounded-full filter blur-xl opacity-20 -mr-6 -mb-6 ${
-                        isRoomCritical ? 'bg-rose-500 animate-ping' : isRoomWarning ? 'bg-amber-500' : 'bg-primary-500'
-                      }`} />
-                    )}
                   </div>
                 );
               })}
@@ -171,94 +174,174 @@ export const LiveMonitoring: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Location Telemetry Sidebar */}
-        <div className="space-y-6">
-          
-          {/* Active Wearable Status */}
+        {/* Console sidebar */}
+        <div className="space-y-4">
+          {/* System status */}
           <Card>
             <CardHeader>
               <div>
-                <CardTitle className="text-lg">Elder Wearable Link</CardTitle>
-                <CardDescription>Telemetry diagnostic</CardDescription>
+                <CardTitle>System Status</CardTitle>
+                <CardDescription>From detection engine</CardDescription>
               </div>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="p-4 bg-navy-50 dark:bg-navy-850 rounded-2xl border border-navy-105 dark:border-navy-800 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="bg-primary-100 dark:bg-primary-950 p-2.5 rounded-xl text-primary-500 dark:text-primary-400 border border-primary-200 dark:border-primary-800">
-                    <Heart size={20} className="stroke-[2.5]" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-navy-800 dark:text-navy-100">ElderSafe Smart Band</h4>
-                    <span className="text-xs text-emerald-650 font-bold block mt-0.5">Connected</span>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <span className="text-sm font-black text-navy-900 dark:text-white">82%</span>
-                  <span className="text-[10px] text-navy-400 font-bold block uppercase">Battery</span>
-                </div>
+            <CardContent className="space-y-3 pt-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-navy-400">Overall</span>
+                <span className={`font-semibold ${
+                  safetyStatus === 'SAFE' ? 'text-emerald-400' : safetyStatus === 'WARNING' ? 'text-amber-400' : 'text-rose-400'
+                }`}>{systemStatus}</span>
               </div>
-
-              <div className="space-y-3 pt-2">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="font-semibold text-navy-500">Heart Rate (Avg)</span>
-                  <span className="font-bold text-navy-800 dark:text-navy-200">74 bpm (Normal)</span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="font-semibold text-navy-500">Skin Temp (Avg)</span>
-                  <span className="font-bold text-navy-800 dark:text-navy-200">36.6 °C</span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="font-semibold text-navy-500">Wearer Position</span>
-                  <span className="font-bold text-navy-800 dark:text-navy-200">
-                    {safetyStatus === 'CRITICAL' ? 'Horizontal (Reclined)' : 'Vertical (Upright)'}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="font-semibold text-navy-500">Step Count Today</span>
-                  <span className="font-bold text-navy-800 dark:text-navy-200">2,410 steps</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Gateway Status Panel */}
-          <Card>
-            <CardHeader>
-              <div>
-                <CardTitle className="text-lg">Gateway Network</CardTitle>
-                <CardDescription>ESP32 Bluetooth-WiFi Hub</CardDescription>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-semibold text-navy-500">RF Gateway Signal</span>
-                <Badge variant={safetyStatus === 'CRITICAL' && statusText.includes('Gateway') ? 'danger' : 'success'} className="font-bold font-mono">
-                  {safetyStatus === 'CRITICAL' && statusText.includes('Gateway') ? 'DISCONNECTED' : 'EXCELLENT (-58dBm)'}
-                </Badge>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-semibold text-navy-500">WiFi Network Status</span>
-                <span className="font-bold text-navy-800 dark:text-navy-200">Connected (ElderSafe_5G)</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-semibold text-navy-500">Active Sensors Linked</span>
-                <span className="font-bold text-navy-800 dark:text-navy-200">6 Sensors Active</span>
-              </div>
-              
-              <div className="bg-primary-50/50 dark:bg-primary-950/20 border border-primary-100/50 dark:border-primary-900/50 rounded-xl p-3 flex items-start gap-2.5">
-                <Radio className="text-primary-500 mt-0.5" size={16} />
-                <span className="text-[10px] text-primary-800 dark:text-primary-300 font-medium leading-normal">
-                  Gateway scans BLE advertising packages from Wearable, checking RSSI thresholds to detect room-level localization.
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-navy-400">Status detail</span>
+                <span className="font-medium text-navy-200 text-right max-w-[60%] truncate" title={statusText}>
+                  {statusText}
                 </span>
               </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-navy-400">Data mode</span>
+                <span className="font-medium text-navy-200">
+                  {dataMode === 'hardware' ? 'Live hardware' : 'Demo simulation'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-navy-400">Sensors online</span>
+                <span className="font-medium text-navy-200">{onlineCount}/{sensors.length}</span>
+              </div>
             </CardContent>
           </Card>
 
+          {/* Gateway / ESP32 */}
+          <Card>
+            <CardHeader>
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Cpu size={14} className="text-navy-500" />
+                  ESP32 Gateway
+                </CardTitle>
+                <CardDescription>Device registry entry</CardDescription>
+              </div>
+              {gateway && (
+                <Badge variant={gateway.status === 'Offline' ? 'danger' : 'success'}>
+                  {gateway.status}
+                </Badge>
+              )}
+            </CardHeader>
+            <CardContent className="space-y-2.5 pt-1 text-xs">
+              {!gateway ? (
+                <p className="text-navy-500">No gateway device registered.</p>
+              ) : (
+                <>
+                  <div className="flex justify-between">
+                    <span className="text-navy-400">Name</span>
+                    <span className="text-navy-200 font-medium">{gateway.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-navy-400">Location</span>
+                    <span className="text-navy-200 font-medium">{gateway.location}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-navy-400">Last communication</span>
+                    <span className="text-navy-200 font-medium">{gateway.lastUpdate}</span>
+                  </div>
+                  {gateway.battery !== undefined && (
+                    <div className="flex justify-between">
+                      <span className="text-navy-400">Power</span>
+                      <span className="text-navy-200 font-medium">{gateway.battery}%</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-navy-400">Link</span>
+                    <span className="flex items-center gap-1.5 text-navy-200 font-medium">
+                      {isGatewayOffline ? <WifiOff size={12} className="text-rose-400" /> : <Wifi size={12} className="text-emerald-400" />}
+                      {isGatewayOffline ? 'Disconnected' : 'Connected'}
+                    </span>
+                  </div>
+                </>
+              )}
+              {dataMode === 'demo' && (
+                <p className="text-[10px] text-amber-400/90 pt-1 border-t border-navy-800">
+                  DEMO/SIMULATION — values are simulated, not live hardware telemetry.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Wearable */}
+          <Card>
+            <CardHeader>
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Heart size={14} className="text-navy-500" />
+                  Wearable
+                </CardTitle>
+                <CardDescription>Sensor node status</CardDescription>
+              </div>
+              {wearable && (
+                <Badge variant={wearable.status === 'Offline' ? 'danger' : 'success'}>
+                  {wearable.status}
+                </Badge>
+              )}
+            </CardHeader>
+            <CardContent className="space-y-2.5 pt-1 text-xs">
+              {!wearable ? (
+                <p className="text-navy-500">No wearable device registered.</p>
+              ) : (
+                <>
+                  <div className="flex justify-between">
+                    <span className="text-navy-400">Name</span>
+                    <span className="text-navy-200 font-medium">{wearable.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-navy-400">Battery</span>
+                    <span className="text-navy-200 font-medium">
+                      {wearable.battery !== undefined ? `${wearable.battery}%` : '—'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-navy-400">Last update</span>
+                    <span className="text-navy-200 font-medium">{wearable.lastUpdate}</span>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Live event stream */}
+          <Card>
+            <CardHeader>
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Radio size={14} className="text-navy-500" />
+                  Live Event Stream
+                </CardTitle>
+                <CardDescription>Newest first · from timeline</CardDescription>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-1">
+              {timeline.length === 0 ? (
+                <p className="text-xs text-navy-500 py-3">No events yet.</p>
+              ) : (
+                <ul className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  {timeline.slice(0, 8).map(item => (
+                    <li key={item.id} className="flex items-start gap-2 text-xs py-1.5 border-b border-navy-800/60 last:border-0">
+                      <span className={`mt-1 h-1.5 w-1.5 rounded-full shrink-0 ${
+                        item.severity === 'critical' ? 'bg-rose-500' : item.severity === 'warning' ? 'bg-amber-500' : 'bg-emerald-500'
+                      }`} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-navy-200 truncate">{item.activity}</p>
+                        <p className="text-[10px] text-navy-500 flex items-center gap-1 mt-0.5">
+                          <Clock size={9} />
+                          {item.time} · {item.location} · {item.type}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
         </div>
-
       </div>
-
     </div>
   );
 };
